@@ -1,0 +1,15 @@
+ai2thor==3.3.2
+stable-baselines3==2.0.0
+gym==0.26.2
+numpy==1.24.3
+torch==2.0.1
+opencv-python==4.7.0.72
+tqdm==4.65.0
+
+
+salicon==0.1.0
+pytorch-grad-cam==1.4.6
+pyyaml==6.0
+
+wandb==0.15.0
+tensorboard==2.13.0

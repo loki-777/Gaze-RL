@@ -1,0 +1,6 @@
+env:
+    scene: "FloorPlan1"
+    target: "Microwave"
+model:
+    use_gaze: True
+    learning_rate: 3e-4
