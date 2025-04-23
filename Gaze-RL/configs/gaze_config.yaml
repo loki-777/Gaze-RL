@@ -1,0 +1,17 @@
+data:
+    img_dir: "data/salicon/train_images"
+    heatmap_dir: "data/salicon/train_maps"
+    batch_size: 32
+
+model:
+    input_size: [224, 224]
+
+training:
+    lr: 1e-4
+    weight_decay: 1e-5
+    epochs: 20
+    use_gpu: False
+
+logging:
+    checkpoint_dir: "checkpoints"
+    experiment_name: "gaze_prediction"
