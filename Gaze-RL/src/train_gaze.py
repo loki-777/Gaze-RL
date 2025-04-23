@@ -33,7 +33,7 @@ def main(config_path):
     logger = WandbLogger(project="gaze-prediction", name=config["logging"]["experiment_name"])
     trainer = pl.Trainer(
         accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=torch.cuda.device_count() if use_gpu else "auto",
+        devices=torch.cuda.device_count() if config["training"]["use_gpu"] else "auto",
         max_epochs=config["training"]["epochs"],
         logger=logger,
         callbacks=[
