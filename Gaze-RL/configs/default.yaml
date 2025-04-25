@@ -1,6 +1,59 @@
-env:
-    scene: "FloorPlan1"
-    target: "Microwave"
+# Configuration for Gaze-Guided RL for Object Search in AI2-THOR
+
+# Environment settings
+environment:
+  width: 224
+  height: 224
+  grid_size: 0.25
+  fov: 90
+  depth: true
+  segmentation: true
+  max_steps: 200
+  target_object: "Microwave"
+
+# Model settings
 model:
-    use_gaze: True
-    learning_rate: 3e-4
+  # PPO hyperparameters
+  lr: 3.0e-4
+  n_steps: 128
+  batch_size: 64
+  n_epochs: 4
+  gamma: 0.99
+  gae_lambda: 0.95
+  clip_range: 0.2
+  ent_coef: 0.01
+  vf_coef: 0.5
+  max_grad_norm: 0.5
+  
+  # Network settings
+  features_extractor: "CustomCNN"
+  use_gaze: false
+
+# Training settings
+training:
+  n_envs: 4
+  total_timesteps: 1000000
+  save_freq: 10000
+  eval_freq: 5000
+  use_gpu: true
+
+# Gaze model settings
+gaze:
+  model_path: "models/gaze_predictor.pth"
+  train_batch_size: 32
+  epochs: 100
+  lr: 1.0e-4
+  weight_decay: 1.0e-5
+
+# Data settings
+data:
+  img_dir: "data/salicon_processed/images/train"
+  heatmap_dir: "data/salicon_processed/heatmaps/train"
+  batch_size: 32
+
+# Logging settings
+logging:
+  experiment_name: "gaze_rl_search"
+  checkpoint_dir: "checkpoints"
+  video_dir: "videos"
+  log_dir: "logs"
