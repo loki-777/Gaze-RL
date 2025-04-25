@@ -341,7 +341,14 @@ class AI2ThorEnv(gym.Env):
     def close(self):
         """Clean up environment resources."""
         try:
-            self.controller.stop()
+            # Explicitly stop controller
+            if hasattr(self, 'controller'):
+                self.controller.stop()
+                self.controller = None
+                
+            # Force garbage collection
+            import gc
+            gc.collect()
         except Exception as e:
             print(f"Error stopping controller: {e}")
             
