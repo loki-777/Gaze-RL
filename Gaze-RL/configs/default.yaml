@@ -8,7 +8,7 @@ environment:
   fov: 90
   depth: true
   segmentation: true
-  max_steps: 200
+  max_steps: 500
   target_object: "Microwave"
 
 # Model settings

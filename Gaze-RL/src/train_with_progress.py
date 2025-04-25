@@ -256,3 +256,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+# python src/train_with_progress.py --target Microwave --timesteps 50000  

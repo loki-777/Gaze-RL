@@ -75,6 +75,9 @@ class AI2ThorEnv(gym.Env):
         Returns:
             tuple: (observation, info)
         """
+        attempts = 0
+        max_attempts = 3
+
         # Set seed if provided
         if seed is not None:
             random.seed(seed)
@@ -84,47 +87,74 @@ class AI2ThorEnv(gym.Env):
         self.steps = 0
         self.visited_positions = set()
         
-        # Select random scene from list of kitchen scenes
-        kitchen_scenes = [f"FloorPlan{i}" for i in range(1, 31) if i <= 5 or 25 <= i <= 30]
-        scene = random.choice(kitchen_scenes)
-        
-        # Initialize scene
-        self.controller.reset(scene)
-        self.controller.step(dict(action="Initialize", gridSize=self.config.get("grid_size", 0.25)))
-        
-        # Randomize agent starting position
-        reachable_positions = self.controller.step(dict(action="GetReachablePositions")).metadata["actionReturn"]
-        if reachable_positions:
-            random_position = random.choice(reachable_positions)
-            self.controller.step(dict(
-                action="Teleport",
-                position=dict(
-                    x=random_position["x"],
-                    y=random_position["y"],
-                    z=random_position["z"]
+        while attempts < max_attempts:
+            try:
+                problematic_scenes = ["FloorPlan3_physics"]
+                # Select random scene from list of kitchen scenes
+                kitchen_scenes = [f"FloorPlan{i}" for i in range(1, 31) if i <= 5 or 25 <= i <= 30]
+                kitchen_scenes = [s for s in kitchen_scenes if s not in problematic_scenes]
+                scene = random.choice(kitchen_scenes)
+                
+                # Initialize scene
+                self.controller.reset(scene)
+                self.controller.step(dict(action="Initialize", gridSize=self.config.get("grid_size", 0.25)))
+                
+                # Randomize agent starting position
+                reachable_positions = self.controller.step(dict(action="GetReachablePositions")).metadata["actionReturn"]
+                if reachable_positions:
+                    random_position = random.choice(reachable_positions)
+                    self.controller.step(dict(
+                        action="Teleport",
+                        position=dict(
+                            x=random_position["x"],
+                            y=random_position["y"],
+                            z=random_position["z"]
+                        )
+                    ))
+                
+                # Get initial observation
+                obs = self._get_observation()
+                
+                # Add current position to visited positions
+                agent_pos = self._get_agent_position_key()
+                self.visited_positions.add(agent_pos)
+                
+                # Additional info dictionary
+                info = {
+                    "scene": scene,
+                    "visited_positions": len(self.visited_positions),
+                    "agent_position": agent_pos,
+                }
+                
+                # Render if needed
+                if self.render_mode == "human":
+                    self.render()
+                
+                # Return observation and info
+                return obs["rgb"], info
+            
+            except TimeoutError:
+                attempts += 1
+                print(f"Timeout during reset, attempt {attempts}/{max_attempts}")
+                
+                # Recreate controller if needed
+                if self.controller:
+                    try:
+                        self.controller.stop()
+                    except:
+                        pass
+                
+                self.controller = ai2thor.controller.Controller(
+                    width=self.config.get("width", 224),
+                    height=self.config.get("height", 224),
+                    gridSize=self.config.get("grid_size", 0.25),
+                    fieldOfView=self.config.get("fov", 90),
+                    renderDepthImage=self.config.get("depth", True),
+                    renderInstanceSegmentation=self.config.get("segmentation", True),
                 )
-            ))
         
-        # Get initial observation
-        obs = self._get_observation()
-        
-        # Add current position to visited positions
-        agent_pos = self._get_agent_position_key()
-        self.visited_positions.add(agent_pos)
-        
-        # Additional info dictionary
-        info = {
-            "scene": scene,
-            "visited_positions": len(self.visited_positions),
-            "agent_position": agent_pos,
-        }
-        
-        # Render if needed
-        if self.render_mode == "human":
-            self.render()
-        
-        # Return observation and info
-        return obs["rgb"], info
+        # If we've exhausted attempts, raise the error
+        raise RuntimeError("Failed to reset environment after multiple attempts")
         
     def step(self, action):
         """Take action in environment.
