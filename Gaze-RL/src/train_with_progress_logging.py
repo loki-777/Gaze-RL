@@ -322,4 +322,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python train_with_progress.py --exp_name baseline_ppo --target Microwave --timesteps 50000
+# python train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 50000
