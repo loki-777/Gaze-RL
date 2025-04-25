@@ -1,6 +1,6 @@
 data:
-    img_dir: "data/salicon/train_images"
-    heatmap_dir: "data/salicon/train_maps"
+    img_dir: "data/SALICON/images/train"
+    heatmap_dir: "data/SALICON/heatmaps/train"
     batch_size: 32
 
 model:
