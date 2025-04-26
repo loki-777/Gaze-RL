@@ -6,26 +6,49 @@ import pytorch_lightning as pl
 from pytorch_lightning.loggers import WandbLogger
 from pytorch_lightning.callbacks import ModelCheckpoint, LearningRateMonitor
 
-from utils import SALICONDataset
+from src.utils import *
 from src.models.lightning_module import GazeLightningModule
+
+import os, glob
 
 def get_dataloaders(config):
     train_dataset = SALICONDataset(
         img_dir=config["data"]["img_dir"],
         heatmap_dir=config["data"]["heatmap_dir"]
     )
-    return DataLoader(train_dataset, 
+
+    val_dataset = SALICONDataset(
+        img_dir=config["data"]["img_dir"].replace("train", "val"),
+        heatmap_dir=config["data"]["heatmap_dir"].replace("train", "val")
+    )
+    return (DataLoader(train_dataset, 
                      batch_size=config["data"]["batch_size"],
                      shuffle=True,
+                     num_workers=4),
+            DataLoader(val_dataset, 
+                     batch_size=config["data"]["batch_size"],
+                     shuffle=False,
                      num_workers=4)
+    )
 
-def main(config_path):
+def main(config_path, run_test=False):
     with open(config_path, "r") as f:
         config = yaml.safe_load(f)
 
     # Data
-    train_loader = get_dataloaders(config)
+    train_loader, val_loader = get_dataloaders(config)
 
+    if run_test:
+        ckpt = glob.glob(os.path.join(config["logging"]["checkpoint_dir"], "*.ckpt"))[0]
+        model = GazeLightningModule.load_from_checkpoint(ckpt)
+        for batch in val_loader:
+            predictions = model.predict_step(batch, batch_idx=0)
+            images, gts = batch
+            visualize_predictions(images, gts, predictions, num_samples=32)
+            # print(images.shape, gts.shape, predictions.shape)
+            break
+        return
+    
     # Model
     model = GazeLightningModule(config)
 
@@ -41,10 +64,11 @@ def main(config_path):
             LearningRateMonitor()
         ]
     )
-    trainer.fit(model, train_loader)
+    trainer.fit(model, train_dataloaders=train_loader, val_dataloaders=val_loader)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--config", type=str, default="configs/gaze_config.yaml")
+    parser.add_argument("--test", action='store_true')
     args = parser.parse_args()
-    main(args.config)
+    main(args.config, args.test)

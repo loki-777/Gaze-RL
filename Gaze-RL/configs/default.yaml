@@ -27,7 +27,7 @@ model:
   
   # Network settings
   features_extractor: "CustomCNN"
-  use_gaze: false
+  use_gaze: true
 
 # Training settings
 training:

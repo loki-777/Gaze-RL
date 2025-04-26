@@ -6,68 +6,132 @@ from stable_baselines3 import PPO
 from stable_baselines3.common.policies import ActorCriticCnnPolicy
 from stable_baselines3.common.torch_layers import BaseFeaturesExtractor
 
-from .networks import CustomCNN
+
+# Define a custom feature extractor that works with gaze
+# Define a custom feature extractor for gaze integration
+class SimpleGazeExtractor(BaseFeaturesExtractor):
+    def __init__(self, observation_space, features_dim=512):
+        # Initialize the parent class first
+        super().__init__(observation_space, features_dim)
+        
+        # Import your CustomCNN class
+        from src.models.networks import CustomCNN
+        
+        # Create CNN with gaze support - hardcode use_gaze=True
+        self.custom_cnn = CustomCNN(use_gaze=True)
+        
+        # Store gaze heatmap
+        self.gaze_heatmap = None
+    
+    def forward(self, observations):
+        # Process observations
+        rgb = observations.float() / 255.0
+        
+        # Add gaze channel if available
+        if self.gaze_heatmap is not None:
+            gaze = self.gaze_heatmap
+            if len(gaze.shape) == 3:  # (B, H, W)
+                gaze = gaze.unsqueeze(1)  # (B, 1, H, W)
+            x = torch.cat([rgb, gaze], dim=1)  # (B, 4, H, W)
+        else:
+            x = rgb
+        
+        # Pass through CNN
+        return self.custom_cnn(x)
+    
+    def set_gaze_heatmap(self, heatmap):
+        self.gaze_heatmap = heatmap
 
 class GazeFeatureExtractor(BaseFeaturesExtractor):
     """
     CNN feature extractor that processes RGB+Gaze input for RL agent.
     Compatible with Gymnasium.
     """
-    def __init__(self, observation_space, features_dim=512, use_gaze=False):
+    def __init__(self, observation_space, features_dim=512, use_gaze=True):
         # Initialize parent
         super().__init__(observation_space, features_dim)
         
-        # Determine input channels (RGB + optional gaze channel)
+        # Determine input channels based on observation space
         self.use_gaze = use_gaze
+        input_channels = 3  # Default to RGB
         
-        # Create CNN feature extractor
-        self.cnn = CustomCNN(use_gaze=use_gaze)
+        # Check observation shape to determine channels
+        if isinstance(observation_space, spaces.Box):
+            if len(observation_space.shape) == 3:  # (H, W, C)
+                input_channels = observation_space.shape[2]
+                # Verify if we have 4 channels (RGB + gaze)
+                if input_channels == 4 and use_gaze:
+                    print("Using 4-channel input (RGB + gaze)")
+                elif input_channels == 3 and use_gaze:
+                    print("WARNING: Using gaze but observation space has only 3 channels")
+                    # We'll handle this gracefully by not using gaze
+                    self.use_gaze = False
         
-        # Get feature dimension from CNN
+        # Create CNN for feature extraction
+        self.cnn = self._build_cnn(input_channels)
+        
+        # Output feature dimension
         self.features_dim = features_dim
+        
+        # Layer normalization for better training stability
+        self.layer_norm = nn.LayerNorm(features_dim)
+        
+    def _build_cnn(self, input_channels):
+        """Build CNN architecture for feature extraction."""
+        return nn.Sequential(
+            # First convolutional layer
+            nn.Conv2d(input_channels, 32, kernel_size=8, stride=4, padding=0),
+            nn.ReLU(),
+            
+            # Second convolutional layer
+            nn.Conv2d(32, 64, kernel_size=4, stride=2, padding=0),
+            nn.ReLU(),
+            
+            # Third convolutional layer
+            nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=0),
+            nn.ReLU(),
+            
+            # Flatten layer
+            nn.Flatten(),
+            
+            # Fully connected layers
+            nn.Linear(64 * 9 * 9, 512),  # Size will depend on input dimensions
+            nn.ReLU(),
+            
+            # Output layer
+            nn.Linear(512, self.features_dim)
+        )
         
     def forward(self, observations):
         """
         Process observations (images + optional gaze heatmap).
         
         Args:
-            observations: For standard mode, this is a tensor of RGB images.
-                         If using gaze, we expect the gaze heatmap in the info dict.
+            observations: Tensor of shape (batch_size, height, width, channels)
+                         For RGB+gaze, channels should be 4
             
         Returns:
             torch.Tensor: Features extracted from observations
         """
-        # Process RGB images - in Gymnasium/SB3 2.0, observations are typically tensors
-        if isinstance(observations, dict):
-            # If still using dict observations
-            rgb = observations["rgb"].float() / 255.0
-        else:
-            # Standard case - plain tensor
-            rgb = observations.float() / 255.0
+        # Ensure observations have the right format for PyTorch (B, C, H, W)
+        if isinstance(observations, np.ndarray):
+            observations = torch.as_tensor(observations).float()
         
-        # If using gaze, we need to get it from elsewhere
-        # In Gymnasium, we would typically put gaze info in the info dict
-        # and access it before passing to the model
-        if self.use_gaze and hasattr(self, 'gaze_heatmap') and self.gaze_heatmap is not None:
-            # Ensure gaze channel has proper shape
-            gaze = self.gaze_heatmap
-            
-            if len(gaze.shape) == 3:  # (B, H, W)
-                gaze = gaze.unsqueeze(1)  # Add channel dim: (B, 1, H, W)
-            
-            # Concatenate RGB and gaze along channel dimension
-            x = torch.cat([rgb, gaze], dim=1)  # (B, 4, H, W)
-        else:
-            x = rgb
+        # Normalize observations to [0, 1]
+        if observations.max() > 1.0:
+            observations = observations / 255.0
         
-        # Extract features using CNN
-        features = self.cnn(x)
+        # PyTorch expects (B, C, H, W) but SB3 uses (B, H, W, C)
+        if observations.shape[-1] in [3, 4]:  # Last dim is channels
+            observations = observations.permute(0, 3, 1, 2)
+            
+        # Forward pass through CNN
+        features = self.cnn(observations)
+        
+        # Apply layer normalization
+        features = self.layer_norm(features)
         
         return features
-    
-    def set_gaze_heatmap(self, gaze_heatmap):
-        """Set gaze heatmap for next forward pass."""
-        self.gaze_heatmap = gaze_heatmap
 
 
 class GazePPO(PPO):
@@ -87,13 +151,13 @@ class GazePPO(PPO):
         """
         # Extract configuration
         self.config = config or {}
-        use_gaze = self.config.get("use_gaze", False)
+        self.use_gaze = self.config.get("use_gaze", False)
         
         # Define policy kwargs
         policy_kwargs = kwargs.pop("policy_kwargs", {})
         policy_kwargs.update({
-            "features_extractor_class": GazeFeatureExtractor,
-            "features_extractor_kwargs": {"use_gaze": use_gaze}
+            "features_extractor_class": SimpleGazeExtractor,
+            "features_extractor_kwargs": {}
         })
         
         # Extract PPO hyperparameters from config
@@ -122,12 +186,12 @@ class GazePPO(PPO):
             **ppo_kwargs
         )
         
-        # Save gaze setting
-        self.use_gaze = use_gaze
-    
+        # Log configuration
+        print(f"Initialized GazePPO with use_gaze={self.use_gaze}")
+        
     def predict(self, observation, state=None, episode_start=None, deterministic=False):
         """
-        Override predict method to handle gaze information.
+        Override predict method to perform additional processing if needed.
         
         Args:
             observation: Environment observation
@@ -138,20 +202,6 @@ class GazePPO(PPO):
         Returns:
             tuple: (actions, states)
         """
-        # If using gaze, we need to ensure the feature extractor has access to it
-        if self.use_gaze and hasattr(self.policy, 'features_extractor'):
-            # Check if we have gaze information available
-            if isinstance(self.env.buf_infos[0], dict) and "gaze_heatmap" in self.env.buf_infos[0]:
-                # Get gaze heatmap from environment info
-                gaze_heatmap = self.env.buf_infos[0]["gaze_heatmap"]
-                
-                # Convert to tensor if needed
-                if isinstance(gaze_heatmap, np.ndarray):
-                    gaze_heatmap = torch.FloatTensor(gaze_heatmap).to(self.device)
-                
-                # Pass gaze heatmap to feature extractor
-                self.policy.features_extractor.set_gaze_heatmap(gaze_heatmap)
-        
         # Call parent's predict method
         return super().predict(
             observation, 
