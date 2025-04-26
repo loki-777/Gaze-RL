@@ -342,7 +342,7 @@ class AI2ThorEnv(gym.Env):
         """Clean up environment resources."""
         try:
             # Explicitly stop controller
-            if hasattr(self, 'controller'):
+            if hasattr(self, 'controller') and self.controller is not None:
                 self.controller.stop()
                 self.controller = None
                 
