@@ -3,6 +3,8 @@
 import os
 import cv2
 import torch
+import numpy as np
+
 from torch.utils.data import Dataset
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
@@ -12,6 +14,29 @@ import matplotlib.pyplot as plt
 #     if gaze_heatmap:
 #         reward += 0.1 * iou(agent_attention, gaze_heatmap)
 #     return reward
+
+
+def compute_reward(success, step_taken, gaze_iou, progress_delta,
+                   λ=0.5, α=0.1):
+    r_success = 1.0 if success else -0.1
+    r_step = -0.01 if step_taken else 0
+    r_gaze = λ * gaze_iou
+    r_progress = α * progress_delta
+    return r_success + r_step + r_gaze + r_progress
+
+def compute_gaze_iou(agent_map, gaze_map):
+    agent_map = agent_map / (np.sum(agent_map) + 1e-6)
+    gaze_map = gaze_map / (np.sum(gaze_map) + 1e-6)
+    intersection = np.minimum(agent_map, gaze_map).sum()
+    union = np.maximum(agent_map, gaze_map).sum()
+    return intersection / (union + 1e-6)
+
+def compute_metrics(episode_rewards, success_flags, steps_list):
+    return {
+        "avg_reward": np.mean(episode_rewards),
+        "success_rate": np.mean(success_flags),
+        "avg_steps": np.mean(steps_list),
+    }
 
 class SALICONDataset(Dataset):
     def __init__(self, img_dir, heatmap_dir, transform=None):
