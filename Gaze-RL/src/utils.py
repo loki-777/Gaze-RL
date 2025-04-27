@@ -3,6 +3,8 @@
 import os
 import cv2
 import torch
+import numpy as np
+
 from torch.utils.data import Dataset
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
@@ -12,6 +14,69 @@ import matplotlib.pyplot as plt
 #     if gaze_heatmap:
 #         reward += 0.1 * iou(agent_attention, gaze_heatmap)
 #     return reward
+import torch
+import torch.nn.functional as F
+
+class GradCAM:
+    def __init__(self, model, target_layer):
+        self.model = model
+        self.target_layer = target_layer
+        self.gradients = None
+        self.activations = None
+        self._register_hooks()
+
+    def _register_hooks(self):
+        def forward_hook(module, input, output):
+            self.activations = output.detach()
+
+        def backward_hook(module, grad_input, grad_output):
+            self.gradients = grad_output[0].detach()
+
+        self.target_layer.register_forward_hook(forward_hook)
+        self.target_layer.register_full_backward_hook(backward_hook)
+
+    def generate(self, input_tensor, class_idx=None):
+        output = self.model(input_tensor)
+
+        if class_idx is None:
+            class_idx = output.argmax(dim=1)
+
+        self.model.zero_grad()
+        one_hot = torch.zeros_like(output)
+        one_hot[0, class_idx] = 1
+        output.backward(gradient=one_hot)
+
+        weights = self.gradients.mean(dim=(2, 3), keepdim=True)
+        cam = (weights * self.activations).sum(dim=1, keepdim=True)
+        cam = F.relu(cam)
+
+        cam = F.interpolate(cam, size=input_tensor.shape[2:], mode='bilinear', align_corners=False)
+        cam -= cam.min()
+        cam /= cam.max() + 1e-8
+
+        return cam.squeeze().cpu().numpy()
+
+def compute_reward(success, step_taken, gaze_iou, progress_delta,
+                   λ=0.5, α=0.1):
+    r_success = 1.0 if success else -0.1
+    r_step = -0.01 if step_taken else 0
+    r_gaze = λ * gaze_iou
+    r_progress = α * progress_delta
+    return r_success + r_step + r_gaze + r_progress
+
+def compute_gaze_iou(agent_map, gaze_map):
+    agent_map = agent_map / (np.sum(agent_map) + 1e-6)
+    gaze_map = gaze_map / (np.sum(gaze_map) + 1e-6)
+    intersection = np.minimum(agent_map, gaze_map).sum()
+    union = np.maximum(agent_map, gaze_map).sum()
+    return intersection / (union + 1e-6)
+
+def compute_metrics(episode_rewards, success_flags, steps_list):
+    return {
+        "avg_reward": np.mean(episode_rewards),
+        "success_rate": np.mean(success_flags),
+        "avg_steps": np.mean(steps_list),
+    }
 
 class SALICONDataset(Dataset):
     def __init__(self, img_dir, heatmap_dir, transform=None):
