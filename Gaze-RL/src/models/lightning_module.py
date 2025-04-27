@@ -80,8 +80,6 @@ class GazeLightningModule(pl.LightningModule):
         return Adam(self.parameters(), 
                   lr=float(self.config["training"]["lr"]),
                   weight_decay=float(self.config["training"]["weight_decay"]))
-                  lr=float(self.config["training"]["lr"]),
-                  weight_decay=float(self.config["training"]["weight_decay"]))
 
     def predict_step(self, batch, batch_idx=None):
         # Handle different input types
