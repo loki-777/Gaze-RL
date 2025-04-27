@@ -11,6 +11,8 @@ from src.models.lightning_module import GazeLightningModule
 
 import os, glob
 
+torch.backends.nnpack.enabled = False
+
 def get_dataloaders(config):
     train_dataset = SALICONDataset(
         img_dir=config["data"]["img_dir"],
@@ -39,12 +41,16 @@ def main(config_path, run_test=False):
     train_loader, val_loader = get_dataloaders(config)
 
     if run_test:
-        ckpt = glob.glob(os.path.join(config["logging"]["checkpoint_dir"], "*.ckpt"))[0]
+        ckpt = glob.glob(os.path.join(config["logging"]["checkpoint_dir"], "UNET", "*.ckpt"))[0]
         model = GazeLightningModule.load_from_checkpoint(ckpt)
         for batch in val_loader:
-            predictions = model.predict_step(batch, batch_idx=0)
+            model.eval()
+            # model = model.to(torch.float32)
+            # predictions = model.predict_step(batch, batch_idx=0)
             images, gts = batch
-            visualize_predictions(images, gts, predictions, num_samples=32)
+            images = images.to(torch.float32)
+            predictions = model(images)
+            visualize_predictions(images, gts, predictions, num_samples=5)
             # print(images.shape, gts.shape, predictions.shape)
             break
         return
@@ -55,8 +61,9 @@ def main(config_path, run_test=False):
     # Training
     logger = WandbLogger(project="gaze-prediction", name=config["logging"]["experiment_name"])
     trainer = pl.Trainer(
-        accelerator="gpu" if torch.cuda.is_available() else "cpu",
-        devices=torch.cuda.device_count() if config["training"]["use_gpu"] else "auto",
+        # accelerator="gpu" if torch.cuda.is_available() else "cpu",
+        accelerator="cpu",
+        # devices=torch.cuda.device_count() if config["training"]["use_gpu"] else "auto",
         max_epochs=config["training"]["epochs"],
         logger=logger,
         callbacks=[

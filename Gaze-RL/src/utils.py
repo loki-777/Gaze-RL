@@ -2,8 +2,11 @@ import os
 import cv2
 import numpy as np
 import torch
+import numpy as np
+
 from torch.utils.data import Dataset
 from scipy.ndimage import gaussian_filter
+import matplotlib.pyplot as plt
 
 def calculate_reward(obs, action, target_object="Microwave", gaze_heatmap=None):
     """Calculate reward for the agent.
