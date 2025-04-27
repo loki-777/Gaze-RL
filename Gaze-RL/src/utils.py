@@ -1,7 +1,6 @@
-# should contain helper functions for rewards, loggers, wrappers
-## TODO
 import os
 import cv2
+import numpy as np
 import torch
 import numpy as np
 
@@ -9,75 +8,116 @@ from torch.utils.data import Dataset
 from scipy.ndimage import gaussian_filter
 import matplotlib.pyplot as plt
 
-# def calculate_reward(obs, action, gaze_heatmap=None):
-#     reward = -0.01  # Step penalty
-#     if gaze_heatmap:
-#         reward += 0.1 * iou(agent_attention, gaze_heatmap)
-#     return reward
-import torch
-import torch.nn.functional as F
+def calculate_reward(obs, action, target_object="Microwave", gaze_heatmap=None):
+    """Calculate reward for the agent.
+    
+    Args:
+        obs: Dictionary containing observation information
+        action: Action taken by the agent
+        target_object: Target object to search for
+        gaze_heatmap: Optional gaze heatmap to guide exploration
+        
+    Returns:
+        float: Calculated reward
+    """
+    reward = -0.01  # Step penalty to encourage efficiency
+    
+    # Reward for finding the target object
+    if target_object in obs["visible_objects"]:
+        # Calculate reward based on object visibility/position
+        visibility_score = obs["object_visibility"].get(target_object, 0)
+        reward += 2.0 * visibility_score
+    
+    # Success reward (if object is found and agent is close)
+    if obs["success"]:
+        reward += 10.0
+    
+    # Penalty for repeated actions (if provided in obs)
+    if obs.get("repeated_action", False):
+        reward -= 0.1
+        
+    # Gaze-guided reward component
+    if gaze_heatmap is not None:
+        # Extract agent's current view coordinates
+        agent_position = obs.get("agent_position", (0, 0))
+        
+        # Calculate attention overlap using IoU
+        attention_score = calculate_attention_iou(agent_position, gaze_heatmap)
+        reward += 0.2 * attention_score
+    
+    return reward
 
-class GradCAM:
-    def __init__(self, model, target_layer):
-        self.model = model
-        self.target_layer = target_layer
-        self.gradients = None
-        self.activations = None
-        self._register_hooks()
+def calculate_attention_iou(agent_position, gaze_heatmap, view_radius=50):
+    """Calculate IoU between agent's view area and gaze heatmap.
+    
+    Args:
+        agent_position: (x, y) position of agent in environment
+        gaze_heatmap: 2D numpy array representing gaze heatmap
+        view_radius: Radius of agent's view area
+        
+    Returns:
+        float: IoU score
+    """
+    # Create binary mask for agent's view area
+    x, y = agent_position
+    h, w = gaze_heatmap.shape
+    
+    # Create agent view mask
+    agent_view = np.zeros_like(gaze_heatmap)
+    
+    # Ensure coordinates are within bounds
+    x = min(max(0, x), w-1)
+    y = min(max(0, y), h-1)
+    
+    # Create circular mask for agent's view
+    y_indices, x_indices = np.ogrid[:h, :w]
+    distance = np.sqrt((x_indices - x)**2 + (y_indices - y)**2)
+    agent_view[distance <= view_radius] = 1
+    
+    # Threshold gaze heatmap
+    gaze_binary = (gaze_heatmap > 0.2).astype(np.float32)
+    
+    # Calculate IoU
+    intersection = np.logical_and(agent_view, gaze_binary).sum()
+    union = np.logical_or(agent_view, gaze_binary).sum()
+    
+    if union == 0:
+        return 0
+    
+    return intersection / union
 
-    def _register_hooks(self):
-        def forward_hook(module, input, output):
-            self.activations = output.detach()
-
-        def backward_hook(module, grad_input, grad_output):
-            self.gradients = grad_output[0].detach()
-
-        self.target_layer.register_forward_hook(forward_hook)
-        self.target_layer.register_full_backward_hook(backward_hook)
-
-    def generate(self, input_tensor, class_idx=None):
-        output = self.model(input_tensor)
-
-        if class_idx is None:
-            class_idx = output.argmax(dim=1)
-
-        self.model.zero_grad()
-        one_hot = torch.zeros_like(output)
-        one_hot[0, class_idx] = 1
-        output.backward(gradient=one_hot)
-
-        weights = self.gradients.mean(dim=(2, 3), keepdim=True)
-        cam = (weights * self.activations).sum(dim=1, keepdim=True)
-        cam = F.relu(cam)
-
-        cam = F.interpolate(cam, size=input_tensor.shape[2:], mode='bilinear', align_corners=False)
-        cam -= cam.min()
-        cam /= cam.max() + 1e-8
-
-        return cam.squeeze().cpu().numpy()
-
-def compute_reward(success, step_taken, gaze_iou, progress_delta,
-                   λ=0.5, α=0.1):
-    r_success = 1.0 if success else -0.1
-    r_step = -0.01 if step_taken else 0
-    r_gaze = λ * gaze_iou
-    r_progress = α * progress_delta
-    return r_success + r_step + r_gaze + r_progress
-
-def compute_gaze_iou(agent_map, gaze_map):
-    agent_map = agent_map / (np.sum(agent_map) + 1e-6)
-    gaze_map = gaze_map / (np.sum(gaze_map) + 1e-6)
-    intersection = np.minimum(agent_map, gaze_map).sum()
-    union = np.maximum(agent_map, gaze_map).sum()
-    return intersection / (union + 1e-6)
-
-def compute_metrics(episode_rewards, success_flags, steps_list):
-    return {
-        "avg_reward": np.mean(episode_rewards),
-        "success_rate": np.mean(success_flags),
-        "avg_steps": np.mean(steps_list),
+def get_exploration_metrics(episode_info):
+    """Calculate exploration metrics from episode information.
+    
+    Args:
+        episode_info: Dictionary containing episode information
+        
+    Returns:
+        dict: Dictionary of metrics
+    """
+    metrics = {
+        "success_rate": float(episode_info["success"]),
+        "episode_length": episode_info["episode_length"],
+        "cumulative_reward": episode_info["cumulative_reward"],
     }
+    
+    # Add object-specific metrics
+    if "visible_objects" in episode_info:
+        metrics["unique_objects_seen"] = len(set(episode_info["visible_objects"]))
+    
+    # Add exploration coverage
+    if "explored_area" in episode_info:
+        metrics["exploration_coverage"] = episode_info["explored_area"]
+    
+    return metrics
 
+def normalize_image(image):
+    """Normalize image pixels to range [0, 1]."""
+    if image.max() > 1.0:
+        return image / 255.0
+    return image
+
+# Dataset class for SALICON
 class SALICONDataset(Dataset):
     def __init__(self, img_dir, heatmap_dir, transform=None):
         self.img_dir = img_dir
@@ -90,15 +130,19 @@ class SALICONDataset(Dataset):
 
     def __getitem__(self, idx):
         img_path = os.path.join(self.img_dir, self.img_names[idx])
-        heatmap_path = os.path.join(self.heatmap_dir, 
-                                  self.img_names[idx].replace('.jpg', '.png'))
+        heatmap_path = os.path.join(
+            self.heatmap_dir, 
+            self.img_names[idx].replace('.jpg', '.png')
+        )
         
         # Load and preprocess
         img = cv2.cvtColor(cv2.imread(img_path), cv2.COLOR_BGR2RGB)
-        img = cv2.resize(img, (224, 224)) / 255.0
+        img = cv2.resize(img, (224, 224))
+        img = normalize_image(img)
         
         heatmap = cv2.imread(heatmap_path, cv2.IMREAD_GRAYSCALE)
-        heatmap = cv2.resize(heatmap, (224, 224)) / 255.0
+        heatmap = cv2.resize(heatmap, (224, 224))
+        heatmap = normalize_image(heatmap)
 
         if self.transform:
             img = self.transform(img)
@@ -109,35 +153,39 @@ class SALICONDataset(Dataset):
             torch.FloatTensor(heatmap).unsqueeze(0)   # (1, 224, 224)
         )
 
-
-def visualize_predictions(images, ground_truths, predictions, num_samples=5):
-    num_samples = min(num_samples, images.size(0))
+# Environment wrapper for adding gaze features
+class GazeEnvWrapper:
+    def __init__(self, env, gaze_predictor=None):
+        self.env = env
+        self.gaze_predictor = gaze_predictor
     
-    fig, axes = plt.subplots(num_samples, 3, figsize=(12, 4 * num_samples))
-    axes = axes if num_samples > 1 else [axes]
-
-    for i in range(num_samples):
-        # Convert image from [3, H, W] to [H, W, 3] for display
-        img = images[i].permute(1, 2, 0).cpu().numpy()
+    def reset(self):
+        obs = self.env.reset()
+        if self.gaze_predictor:
+            gaze_heatmap = self._predict_gaze(obs["rgb"])
+            obs["gaze_heatmap"] = gaze_heatmap
+        return obs
+    
+    def step(self, action):
+        obs, reward, done, info = self.env.step(action)
+        if self.gaze_predictor:
+            gaze_heatmap = self._predict_gaze(obs["rgb"])
+            obs["gaze_heatmap"] = gaze_heatmap
+            # Augment reward with gaze information
+            reward = calculate_reward(obs, action, gaze_heatmap=gaze_heatmap)
+        return obs, reward, done, info
+    
+    def _predict_gaze(self, image):
+        """Predict gaze heatmap from RGB image."""
+        if image.shape != (224, 224, 3):
+            image = cv2.resize(image, (224, 224))
         
-        # Squeeze ground truth and prediction to [H, W]
-        gt = ground_truths[i].squeeze(0).cpu().numpy()
-        pred = predictions[i].squeeze(0).detach().numpy()
-
-        # Original image
-        axes[i][0].imshow(img)
-        axes[i][0].set_title("Input Image")
-        axes[i][0].axis("off")
-
-        # Ground truth
-        axes[i][1].imshow(gt, cmap="hot")
-        axes[i][1].set_title("Ground Truth")
-        axes[i][1].axis("off")
-
-        # Prediction
-        axes[i][2].imshow(pred, cmap="hot")
-        axes[i][2].set_title("Prediction")
-        axes[i][2].axis("off")
-    
-    plt.tight_layout()
-    plt.show()
+        # Normalize and convert to tensor
+        image = normalize_image(image)
+        image_tensor = torch.FloatTensor(image).permute(2, 0, 1).unsqueeze(0)
+        
+        # Run prediction
+        with torch.no_grad():
+            heatmap = self.gaze_predictor(image_tensor).squeeze().numpy()
+        
+        return heatmap
