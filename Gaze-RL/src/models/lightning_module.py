@@ -4,8 +4,7 @@ from torchmetrics import MeanSquaredError
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torch.optim import Adam
 
-from src.models.gaze_predictor import *
-
+from src.models.gaze_predictor import GazePredictor
 
 class GazeLightningModule(pl.LightningModule):
     def __init__(self, config):
@@ -23,7 +22,6 @@ class GazeLightningModule(pl.LightningModule):
         # To accumulate loss and metrics for averaging
         self.train_loss_epoch = 0.0
         self.val_mse_epoch = 0.0
-        self.val_ssim_epoch = 0.0  # New accumulator for SSIM
         self.train_step_count = 0
         self.val_step_count = 0
 
@@ -38,7 +36,19 @@ class GazeLightningModule(pl.LightningModule):
         # Log running training metrics
         self.train_loss_epoch += loss.item()
         self.train_step_count += 1
+        # Log running training metrics
+        self.train_loss_epoch += loss.item()
+        self.train_step_count += 1
         return loss
+
+    def on_train_epoch_end(self):
+        # Log average training loss at the end of the epoch
+        avg_train_loss = self.train_loss_epoch / self.train_step_count
+        self.log("epoch_train_loss", avg_train_loss, prog_bar=True)
+
+        # Reset counters for the next epoch
+        self.train_loss_epoch = 0.0
+        self.train_step_count = 0
 
     def on_train_epoch_end(self):
         # Log average training loss at the end of the epoch
@@ -55,27 +65,31 @@ class GazeLightningModule(pl.LightningModule):
         
         # Accumulate validation metrics
         self.val_mse_epoch += self.mse_metric(preds, heatmaps)
-        self.val_ssim_epoch += self.ssim_metric(preds, heatmaps)  # Update SSIM metric
         self.val_step_count += 1
 
     def on_validation_epoch_end(self):
         # Log average validation metrics at the end of the epoch
         avg_val_mse = self.val_mse_epoch / self.val_step_count
-        avg_val_ssim = self.val_ssim_epoch / self.val_step_count
-        
         self.log("epoch_val_mse", avg_val_mse, prog_bar=True)
-        self.log("epoch_val_ssim", avg_val_ssim, prog_bar=True)  # Log SSIM
 
         # Reset counters for the next epoch
         self.val_mse_epoch = 0.0
-        self.val_ssim_epoch = 0.0
         self.val_step_count = 0
 
     def configure_optimizers(self):
         return Adam(self.parameters(), 
                   lr=float(self.config["training"]["lr"]),
                   weight_decay=float(self.config["training"]["weight_decay"]))
+                  lr=float(self.config["training"]["lr"]),
+                  weight_decay=float(self.config["training"]["weight_decay"]))
 
-    def predict_step(self, batch, batch_idx):
-        imgs, _ = batch
+    def predict_step(self, batch, batch_idx=None):
+        # Handle different input types
+        if isinstance(batch, tuple) and len(batch) == 2:
+            # Regular case: batch contains (imgs, labels)
+            imgs, _ = batch
+        else:
+            # Direct inference case: batch is just the image tensor
+            imgs = batch
+        
         return self(imgs)
