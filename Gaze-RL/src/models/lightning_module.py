@@ -4,7 +4,7 @@ from torchmetrics import MeanSquaredError
 from torchmetrics.image import StructuralSimilarityIndexMeasure
 from torch.optim import Adam
 
-from src.models.gaze_predictor import GazePredictor
+from src.models.gaze_predictor import *
 
 class GazeLightningModule(pl.LightningModule):
     def __init__(self, config):
