@@ -50,7 +50,7 @@ def main(config_path, run_test=False):
             images, gts = batch
             images = images.to(torch.float32)
             predictions = model(images)
-            visualize_predictions(images, gts, predictions, num_samples=5)
+            visualize_predictions(images[:5, :, :, :], gts[:5, :, :, :], predictions[:5, :, :, :], num_samples=5)
             # print(images.shape, gts.shape, predictions.shape)
             break
         return
