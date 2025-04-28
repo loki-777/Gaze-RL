@@ -11,10 +11,13 @@ class GazeLightningModule(pl.LightningModule):
         super().__init__()
         self.save_hyperparameters()
         self.config = config
-        if config["model"]["network"] == "UNET":
-            self.model = UNET()
-        elif config["model"]["network"] == "RESNET":
-            self.model = RESNET()
+        
+        # if config["model"]["network"] == "UNET":
+        #     self.model = UNET()
+        # elif config["model"]["network"] == "RESNET":
+        #     self.model = RESNET()
+        
+        self.model = UNET()
         self.mse_metric = MeanSquaredError()
         self.ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0)
         self.loss_fn = nn.MSELoss()

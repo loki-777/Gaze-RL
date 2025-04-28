@@ -6,8 +6,8 @@ seed: 42
 
 # Data configuration
 data:
-  img_dir: "datasets/SALICON/train/images"
-  heatmap_dir: "datasets/SALICON/train/maps"
+  img_dir: "data/SALICON/images/train"
+  heatmap_dir: "data/SALICON/heatmaps/train"
   batch_size: 8
   val_split: 0.1
 
@@ -17,6 +17,7 @@ model:
   pretrained: true
   normalize_heatmap: true
   smooth_sigma: 2.0
+  network: "UNET"
 
 # Training parameters
 training:
@@ -28,7 +29,7 @@ training:
 
 # Logging
 logging:
-  checkpoint_dir: "checkpoints/gaze_model"
+  checkpoint_dir: "checkpoints/"
   log_interval: 10
   val_interval: 1
   tensorboard: true

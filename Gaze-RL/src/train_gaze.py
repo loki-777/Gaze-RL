@@ -11,8 +11,6 @@ from src.models.lightning_module import GazeLightningModule
 
 import os, glob
 
-torch.backends.nnpack.enabled = False
-
 def get_dataloaders(config):
     train_dataset = SALICONDataset(
         img_dir=config["data"]["img_dir"],
