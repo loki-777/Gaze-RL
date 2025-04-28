@@ -3,117 +3,92 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet18
 
-class CustomCNN(nn.Module):
-    """
-    Custom CNN for feature extraction with optional gaze input channel.
-    Modified ResNet18 to accept 4 channels (RGB + gaze) as input.
-    Compatible with Gymnasium.
-    """
+class CNN(nn.Module):
     def __init__(self, use_gaze=False):
         super().__init__()
         self.use_gaze = use_gaze
-        
-        # Load pretrained ResNet18
         self.backbone = resnet18(pretrained=True)
         
-        # Modify first layer to handle 4 channels if using gaze
         if use_gaze:
-            # Get weights from the original first layer
             original_weights = self.backbone.conv1.weight.data
-            
-            # Create new conv layer with 4 input channels
             self.backbone.conv1 = nn.Conv2d(
                 4, 64, kernel_size=7, stride=2, padding=3, bias=False
             )
             
-            # Initialize new layer with weights from original layer
             with torch.no_grad():
-                # Copy RGB weights
                 self.backbone.conv1.weight.data[:, :3] = original_weights
-                
-                # Initialize gaze channel weights (copy from red channel)
                 self.backbone.conv1.weight.data[:, 3] = original_weights[:, 0]
         
-        # Replace final fully connected layer
         num_features = self.backbone.fc.in_features
         self.backbone.fc = nn.Linear(num_features, 512)
-        
-        # Add layer normalization
+
         self.ln = nn.LayerNorm(512)
         
-    def forward(self, x):
-        """
-        Forward pass through network.
-        
-        Args:
-            x: Input tensor of shape (B, C, H, W) where C is 3 (RGB) or 4 (RGB+gaze)
-            
-        Returns:
-            torch.Tensor: Feature tensor of shape (B, 512)
-        """
-        # Handle channel order - SB3 expects (B, H, W, C) but PyTorch needs (B, C, H, W)
+    def forward(self, x, gaze_heatmap):
+        x = torch.cat([x, gaze_heatmap], dim=1)
         if len(x.shape) == 4 and x.shape[1] != 3 and x.shape[1] != 4:
-            # Format is likely (B, H, W, C), convert to (B, C, H, W)
             if x.shape[3] == 3 or x.shape[3] == 4:
                 x = x.permute(0, 3, 1, 2)
-        
-        # Forward pass through backbone
+
         features = self.backbone(x)
-        
-        # Apply layer normalization
         features = self.ln(features)
         
         return features
 
 
-class GazeAttentionModule(nn.Module):
-    """
-    Optional attention module that can be used to incorporate gaze information
-    into feature extraction process.
-    """
-    def __init__(self, in_channels):
+
+class GazeAttnCNN(nn.Module):
+    def __init__(self, use_gaze=False, num_heads=8):
         super().__init__()
+        self.use_gaze = use_gaze
         
-        # Convolutional layers for processing gaze heatmap
-        self.gaze_conv = nn.Sequential(
-            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+        # RGB backbone (ResNet18 up to layer4)
+        self.rgb_backbone = resnet18(pretrained=True)
+        self.rgb_backbone = nn.Sequential(*list(self.rgb_backbone.children())[:-2])
+        
+        # Gaze encoder (lightweight)
+        self.gaze_encoder = nn.Sequential(
+            nn.Conv2d(1, 64, kernel_size=7, stride=2, padding=3),
             nn.ReLU(),
-            nn.Conv2d(16, 1, kernel_size=1)
+            nn.MaxPool2d(kernel_size=3, stride=2, padding=1),
+            nn.Conv2d(64, 512, kernel_size=3, stride=1, padding=1),
+            nn.AdaptiveAvgPool2d((1, 1))  # Global context
         )
         
-        # Attention fusion layer
-        self.fusion = nn.Conv2d(in_channels + 1, in_channels, kernel_size=1)
+        # Cross-attention fusion
+        self.fusion = nn.MultiheadAttention(512, num_heads)
         
-    def forward(self, features, gaze):
-        """
-        Apply gaze-based attention to features.
+        # Output projection
+        self.projection = nn.Sequential(
+            nn.Linear(512, 1024),
+            nn.ReLU(),
+            nn.LayerNorm(1024),
+            nn.Linear(1024, 512)
+        )
+
+        self.norm_q = nn.LayerNorm(512)
+        self.norm_kv = nn.LayerNorm(512)
+        self.norm_out = nn.LayerNorm(512)
+
+        self.to_q = nn.Linear(512, 512)  # Gaze -> Queries
+        self.to_kv = nn.Linear(512, 2 * 512)  # RGB -> Keys/Values
+
+    def forward(self, x, gaze_heatmap):
+        rgb_feats = self.rgb_backbone(x)
         
-        Args:
-            features: Feature tensor from CNN (B, C, H, W)
-            gaze: Gaze heatmap (B, 1, H, W)
+        if self.use_gaze and gaze_heatmap is not None:
+            gaze_feats = self.gaze_encoder(gaze_heatmap)
+            B, C, H, W = rgb_feats.shape
+            gaze_feats = gaze_feats.expand(B, C, H, W)
             
-        Returns:
-            torch.Tensor: Attended features (B, C, H, W)
-        """
-        # Process gaze heatmap
-        processed_gaze = self.gaze_conv(gaze)
+            q = self.norm_q(gaze_feats)
+            kv = self.norm_kv(rgb_feats)
+            
+            q = self.to_q(q)
+            k, v = self.to_kv(kv).chunk(2, dim=-1)
+            fused = self.fusion(q, k, v)
+        else:
+            fused = rgb_feats
         
-        # Resize gaze to match feature map dimensions
-        if processed_gaze.shape[2:] != features.shape[2:]:
-            processed_gaze = F.interpolate(
-                processed_gaze, 
-                size=features.shape[2:],
-                mode='bilinear', 
-                align_corners=False
-            )
-        
-        # Apply attention mechanism
-        attention = torch.sigmoid(processed_gaze)
-        
-        # Concatenate features with attention map
-        combined = torch.cat([features, attention], dim=1)
-        
-        # Fuse attention with features
-        attended_features = self.fusion(combined)
-        
-        return attended_features
+        out = F.adaptive_avg_pool2d(fused, (1, 1)).flatten(1)
+        return self.projection(out)
