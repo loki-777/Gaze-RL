@@ -2,24 +2,24 @@ import torch.nn as nn
 from torchvision.models import resnet18
 from segmentation_models_pytorch import Unet
 
-class UNET(nn.Module):
-    def __init__(self, pretrained=True):
-        super().__init__()
+# class UNET(nn.Module):
+#     def __init__(self, pretrained=True):
+#         super().__init__()
         
-        self.unet = Unet(
-            encoder_name="resnet34",
-            encoder_weights="imagenet" if pretrained else None,
-            in_channels=3,
-            classes=1,
-            activation='sigmoid'
-        )
+#         self.unet = Unet(
+#             encoder_name="resnet34",
+#             encoder_weights="imagenet" if pretrained else None,
+#             in_channels=3,
+#             classes=1,
+#             activation='sigmoid'
+#         )
         
-        self.final_conv = nn.Conv2d(1, 1, kernel_size=1)
+#         self.final_conv = nn.Conv2d(1, 1, kernel_size=1)
 
-    def forward(self, x):
-        x = self.unet(x)
-        x = self.final_conv(x)
-        return x
+#     def forward(self, x):
+#         x = self.unet(x)
+#         x = self.final_conv(x)
+#         return x
 
 
 class RESNET(nn.Module):

@@ -122,6 +122,10 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="gaze_guided",
                         help="Experiment name for logging")
+    # Gaze Addition Variations
+    parser.add_argument("--gaze_integration", type=str, default="channel",
+                        choices=["channel", "bottleneck", "weighted"],
+                        help="Method to integrate gaze information")
     return parser.parse_args()
 
 def load_gaze_model(checkpoint_path):
@@ -197,14 +201,37 @@ def create_env(config, target_object, gaze_model=None):
     
     return _init
 
-def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided"):
+def parse_args():
+    parser = argparse.ArgumentParser(description="Train Gaze-Guided RL agent for object search")
+    parser.add_argument("--config", type=str, default="configs/default.yaml", 
+                        help="Path to config file")
+    parser.add_argument("--gaze_config", type=str, default="configs/gaze_config.yaml",
+                        help="Path to gaze model config file")
+    parser.add_argument("--gaze_checkpoint", type=str, default=None,
+                        help="Path to pretrained gaze model checkpoint (.ckpt file), overrides config")
+    parser.add_argument("--target", type=str, default="Microwave",
+                        help="Target object to search")
+    parser.add_argument("--log_dir", type=str, default="logs",
+                        help="Directory to save logs")
+    parser.add_argument("--timesteps", type=int, default=50000,
+                        help="Total timesteps for training")
+    # Add experiment name parameter
+    parser.add_argument("--exp_name", type=str, default="gaze_guided",
+                        help="Experiment name for logging")
+    # Add integration method parameter
+    parser.add_argument("--gaze_integration", type=str, default="channel",
+                        choices=["channel", "bottleneck", "weighted"],
+                        help="Method to integrate gaze information")
+    return parser.parse_args()
+
+def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="channel"):
     """Train an agent with gaze guidance"""
     
     # Create timestamp for unique run identification
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     
     # Create unique experiment folder name with timestamp
-    experiment_id = f"{exp_name}_{timestamp}"
+    experiment_id = f"{exp_name}_{gaze_integration}_{timestamp}"
     
     # Create experiment-specific directories
     experiment_dir = os.path.join(log_dir, experiment_id)
@@ -245,7 +272,7 @@ def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", 
         device_name = "CPU"
         
     logger.info("\n" + "="*60)
-    logger.info(f"Experiment: {exp_name} (with gaze)")
+    logger.info(f"Experiment: {exp_name} (with gaze, {gaze_integration} integration)")
     logger.info(f"Experiment ID: {experiment_id}")
     logger.info(f"Starting training run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.info(f"Device: {device} ({device_name})")
@@ -276,6 +303,7 @@ def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", 
         # Update model config
         model_config = config["model"].copy()
         model_config["use_gaze"] = True
+        model_config["integration_method"] = gaze_integration
         
         model = GazePPO(
             env=env,
@@ -287,7 +315,7 @@ def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", 
         
         # Print when training starts
         logger.info("\nStarting training...")
-        logger.info(f"Experiment: {exp_name} (with gaze)")
+        logger.info(f"Experiment: {exp_name} (with gaze, {gaze_integration} integration)")
         logger.info(f"Target: {config['environment']['target_object']}")
         logger.info(f"Timesteps: {total_timesteps}")
         logger.info(f"Using device: {device}\n")
@@ -308,7 +336,7 @@ def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", 
         
         logger.info("\n" + "="*60)
         logger.info("TRAINING COMPLETED!")
-        logger.info(f"Experiment: {exp_name} (with gaze)")
+        logger.info(f"Experiment: {exp_name} (with gaze, {gaze_integration} integration)")
         logger.info(f"Total training time: {train_hours:02d}:{train_minutes:02d}:{train_seconds:02d}")
         logger.info(f"Episodes completed: {len(progress_callback.episode_rewards)}")
         logger.info(f"Final mean reward: {np.mean(progress_callback.episode_rewards[-10:]):.2f}")
@@ -325,6 +353,7 @@ def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", 
             "experiment": exp_name,
             "target_object": config['environment']['target_object'],
             "use_gaze": True,
+            "gaze_integration": gaze_integration,
             "timestamp": timestamp,
             "total_timesteps": total_timesteps,
             "episodes_completed": len(progress_callback.episode_rewards),
@@ -385,11 +414,17 @@ def main():
     # Update config with command line arguments
     config["environment"]["target_object"] = args.target
     
+    # Get gaze checkpoint path - command line arg overrides config
+    gaze_checkpoint_path = args.gaze_checkpoint if args.gaze_checkpoint else config["gaze"]["model_path"]
+    
+    # Get integration method - command line arg overrides config
+    gaze_integration = args.gaze_integration if args.gaze_integration else config["gaze"]["integration_method"]
+    
     # Load pretrained gaze model
-    gaze_model = load_gaze_model(args.gaze_checkpoint)
+    gaze_model = load_gaze_model(gaze_checkpoint_path)
     
     print("\n" + "="*60)
-    print("TRAINING WITH GAZE GUIDANCE")
+    print(f"TRAINING WITH GAZE GUIDANCE ({gaze_integration} integration)")
     print("="*60 + "\n")
     
     # Create environment with gaze
@@ -403,7 +438,8 @@ def main():
         gaze_model=gaze_model,
         total_timesteps=args.timesteps,
         log_dir=args.log_dir,
-        exp_name=args.exp_name
+        exp_name=args.exp_name,
+        gaze_integration=gaze_integration
     )
     
     # Close environment
@@ -414,3 +450,5 @@ if __name__ == "__main__":
 
 # Example usage:
 # python src/train_gaze_guided_rl_final.py --exp_name gaze_guided_search --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt
+
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt --gaze_integration bottleneck

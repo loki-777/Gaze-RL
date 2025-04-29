@@ -17,7 +17,7 @@ class GazeLightningModule(pl.LightningModule):
         # elif config["model"]["network"] == "RESNET":
         #     self.model = RESNET()
         
-        self.model = UNET()
+        self.model = RESNET()
         self.mse_metric = MeanSquaredError()
         self.ssim_metric = StructuralSimilarityIndexMeasure(data_range=1.0)
         self.loss_fn = nn.MSELoss()

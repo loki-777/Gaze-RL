@@ -35,8 +35,6 @@ class CNN(nn.Module):
         
         return features
 
-
-
 class GazeAttnCNN(nn.Module):
     def __init__(self, use_gaze=False, num_heads=8):
         super().__init__()
@@ -55,40 +53,58 @@ class GazeAttnCNN(nn.Module):
             nn.AdaptiveAvgPool2d((1, 1))  # Global context
         )
         
-        # Cross-attention fusion
-        self.fusion = nn.MultiheadAttention(512, num_heads)
+        # Cross-attention fusion - adjust for 2D feature maps
+        self.query_proj = nn.Conv2d(512, 512, kernel_size=1)
+        self.key_proj = nn.Conv2d(512, 512, kernel_size=1)
+        self.value_proj = nn.Conv2d(512, 512, kernel_size=1)
+        
+        self.attention_scale = 512 ** -0.5
+        self.num_heads = num_heads
         
         # Output projection
-        self.projection = nn.Sequential(
-            nn.Linear(512, 1024),
+        self.fc = nn.Sequential(
+            nn.AdaptiveAvgPool2d((1, 1)),
+            nn.Flatten(),
+            nn.Linear(512, 512),
             nn.ReLU(),
-            nn.LayerNorm(1024),
-            nn.Linear(1024, 512)
+            nn.LayerNorm(512)
         )
 
-        self.norm_q = nn.LayerNorm(512)
-        self.norm_kv = nn.LayerNorm(512)
-        self.norm_out = nn.LayerNorm(512)
-
-        self.to_q = nn.Linear(512, 512)  # Gaze -> Queries
-        self.to_kv = nn.Linear(512, 2 * 512)  # RGB -> Keys/Values
-
     def forward(self, x, gaze_heatmap):
-        rgb_feats = self.rgb_backbone(x)
+        # Extract RGB features
+        rgb_feats = self.rgb_backbone(x)  # (B, 512, H, W)
         
         if self.use_gaze and gaze_heatmap is not None:
-            gaze_feats = self.gaze_encoder(gaze_heatmap)
+            # Process gaze heatmap
+            gaze_feats = self.gaze_encoder(gaze_heatmap)  # (B, 512, 1, 1)
+            
             B, C, H, W = rgb_feats.shape
+            
+            # Expand gaze features to match RGB spatial dimensions
             gaze_feats = gaze_feats.expand(B, C, H, W)
             
-            q = self.norm_q(gaze_feats)
-            kv = self.norm_kv(rgb_feats)
+            # Project to query, key, value
+            q = self.query_proj(gaze_feats).view(B, self.num_heads, C // self.num_heads, H * W)
+            k = self.key_proj(rgb_feats).view(B, self.num_heads, C // self.num_heads, H * W)
+            v = self.value_proj(rgb_feats).view(B, self.num_heads, C // self.num_heads, H * W)
             
-            q = self.to_q(q)
-            k, v = self.to_kv(kv).chunk(2, dim=-1)
-            fused = self.fusion(q, k, v)
+            # Transpose for attention
+            q = q.transpose(2, 3)  # (B, num_heads, H*W, C//num_heads)
+            k = k.transpose(2, 3)  # (B, num_heads, H*W, C//num_heads)
+            v = v.transpose(2, 3)  # (B, num_heads, H*W, C//num_heads)
+            
+            # Calculate attention scores
+            attn = torch.matmul(q, k.transpose(-2, -1)) * self.attention_scale
+            attn = F.softmax(attn, dim=-1)
+            
+            # Apply attention to values
+            out = torch.matmul(attn, v)  # (B, num_heads, H*W, C//num_heads)
+            out = out.transpose(2, 3).contiguous().view(B, C, H, W)
+            
+            # Add residual connection
+            fused = out + rgb_feats
         else:
             fused = rgb_feats
         
-        out = F.adaptive_avg_pool2d(fused, (1, 1)).flatten(1)
-        return self.projection(out)
+        # Global pooling and final projection
+        return self.fc(fused)

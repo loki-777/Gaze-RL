@@ -17,7 +17,7 @@ model:
   pretrained: true
   normalize_heatmap: true
   smooth_sigma: 2.0
-  network: "UNET"
+  network: "RESNET"
 
 # Training parameters
 training:

@@ -4,7 +4,7 @@
 environment:
   width: 224
   height: 224
-  grid_size: 0.25
+  grid_size: 0.5
   fov: 90
   depth: true
   segmentation: true
@@ -39,7 +39,8 @@ training:
 
 # Gaze model settings
 gaze:
-  model_path: "models/gaze_predictor.pth"
+  model_path: "logs/epoch=19-step=6260.ckpt"
+  integration_method: "channel"  # Options: "channel", "bottleneck", "weighted"
   train_batch_size: 32
   epochs: 100
   lr: 1.0e-4
