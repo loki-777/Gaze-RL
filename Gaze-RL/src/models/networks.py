@@ -3,8 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet18
 
-class CNN(nn.Module):
-    def __init__(self, use_gaze=False):
+class ChannelCNN(nn.Module):
+    def __init__(self, use_gaze=False, feature_dim=512):
         super().__init__()
         self.use_gaze = use_gaze
         self.backbone = resnet18(pretrained=True)
@@ -20,12 +20,13 @@ class CNN(nn.Module):
                 self.backbone.conv1.weight.data[:, 3] = original_weights[:, 0]
         
         num_features = self.backbone.fc.in_features
-        self.backbone.fc = nn.Linear(num_features, 512)
+        self.backbone.fc = nn.Linear(num_features, feature_dim)
 
-        self.ln = nn.LayerNorm(512)
+        self.ln = nn.LayerNorm(feature_dim)
         
     def forward(self, x, gaze_heatmap):
-        x = torch.cat([x, gaze_heatmap], dim=1)
+        if gaze_heatmap:
+            x = torch.cat([x, gaze_heatmap], dim=1)
         if len(x.shape) == 4 and x.shape[1] != 3 and x.shape[1] != 4:
             if x.shape[3] == 3 or x.shape[3] == 4:
                 x = x.permute(0, 3, 1, 2)
@@ -108,3 +109,36 @@ class GazeAttnCNN(nn.Module):
         
         # Global pooling and final projection
         return self.fc(fused)
+
+class WeightedCNN:
+    def __init__(self, use_gaze=False, feature_dim=512):
+        super().__init__()
+        self.use_gaze = use_gaze
+        # Main CNN backbone
+        self.backbone = resnet18(pretrained=True)
+        # Replace final layer
+        num_features = self.backbone.fc.in_features
+        self.backbone.fc = nn.Linear(num_features, feature_dim)
+        
+        # Gaze processor
+        self.gaze_processor = nn.Sequential(
+            nn.Conv2d(1, 16, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(16, 32, kernel_size=3, padding=1),
+            nn.ReLU(),
+            nn.Conv2d(32, 3, kernel_size=1),  # 3 channels to match RGB
+            nn.Sigmoid()  # Outputs weights between 0 and 1
+        )
+        
+        self.layer_norm = nn.LayerNorm(feature_dim)
+        
+    def forward(self, x, gaze_heatmap=None):
+        if gaze_heatmap is not None:
+            attention_weights = self.gaze_processor(gaze_heatmap)
+            modulated_input = attention_weights * x
+            features = self.backbone(modulated_input)
+        else:
+            features = self.backbone(x)
+        features = self.layer_norm(features)
+        
+        return features
