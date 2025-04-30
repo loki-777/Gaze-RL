@@ -24,6 +24,7 @@ class ProgressCallback(BaseCallback):
         super().__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
+        self.success_rates = []  # Add success rate tracking
         self.current_episode_reward = 0
         self.current_steps = 0
         self.start_time = time.time()
@@ -36,6 +37,7 @@ class ProgressCallback(BaseCallback):
             if "episode" in info:
                 episode_reward = info["episode"]["r"]
                 episode_length = info["episode"]["l"]
+                success = 1 if info.get("success", False) else 0  # Get success flag
                 
                 # Calculate elapsed time
                 elapsed_time = time.time() - self.start_time
@@ -49,19 +51,23 @@ class ProgressCallback(BaseCallback):
                       f"Steps: {self.num_timesteps}/{self.locals['total_timesteps']} | "
                       f"Reward: {episode_reward:.2f} | "
                       f"Length: {episode_length} steps | "
+                      f"Success: {'✓' if success else '✗'} | "  # Add success indicator
                       f"Elapsed: {elapsed_str}")
                 
                 # Store stats
                 self.episode_rewards.append(episode_reward)
                 self.episode_lengths.append(episode_length)
+                self.success_rates.append(success)  # Store success rate
                 
                 # Print additional stats every 5 episodes
                 if len(self.episode_rewards) % 5 == 0:
                     mean_reward = np.mean(self.episode_rewards[-5:])
                     mean_length = np.mean(self.episode_lengths[-5:])
+                    success_rate = np.mean(self.success_rates[-5:]) * 100  # Calculate success rate
                     print(f"[{timestamp}] Last 5 episodes: "
                           f"Mean reward = {mean_reward:.2f} | "
-                          f"Mean length = {mean_length:.1f} steps")
+                          f"Mean length = {mean_length:.1f} steps"
+                          f"Success rate = {success_rate:.1f}%")  # Add success rate
                 
                 # Print overall stats every 10 episodes
                 if len(self.episode_rewards) % 10 == 0:
@@ -188,6 +194,7 @@ def main():
         device_name = "CPU"
         
     logger.info("\n" + "="*60)
+    logger.info("TRAINING COMPLETED!")
     logger.info(f"Experiment: {args.exp_name}")
     logger.info(f"Experiment ID: {experiment_id}")
     logger.info(f"Starting training run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -282,9 +289,11 @@ def main():
             "episodes_completed": len(progress_callback.episode_rewards),
             "episode_rewards": progress_callback.episode_rewards,
             "episode_lengths": progress_callback.episode_lengths,
+            "success_rates": progress_callback.success_rates,  # Add success rates
             "mean_reward": float(np.mean(progress_callback.episode_rewards)),
             "mean_last_10_reward": float(np.mean(progress_callback.episode_rewards[-10:])),
             "mean_episode_length": float(np.mean(progress_callback.episode_lengths)),
+            "overall_success_rate": float(np.mean(progress_callback.success_rates) * 100),  # Add overall success rate
             "training_duration_seconds": train_duration,
         }
         
@@ -322,4 +331,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 50000
+# python src/train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 50000
