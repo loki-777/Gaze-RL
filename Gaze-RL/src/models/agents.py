@@ -68,10 +68,10 @@ class GazePPO(PPO):
         # Extract configuration
         self.config = config or {}
         self.use_gaze = self.config.get("use_gaze", False)
-        
+        print(config)
         CommonFeatureExtractor.configure(
-            network_type=config["model"]["features_extractor"],
-            use_gaze=config["model"]["use_gaze"]
+            network_type=config["features_extractor"],
+            use_gaze=config["use_gaze"]
         )
         
         # Define policy kwargs
@@ -106,9 +106,8 @@ class GazePPO(PPO):
             verbose=1,
             **ppo_kwargs
         )
-        
         # Log configuration
-        print(f"Initialized GazePPO with use_gaze={config["model"]["use_gaze"]}, integration_method={config["model"]["feature_extractor"]}")
+        #print(f"Initialized GazePPO with use_gaze={config["use_gaze"]}, integration_method={config["features_extractor"]}")
 
     def predict(self, observation, state=None, episode_start=None, deterministic=False):
         """

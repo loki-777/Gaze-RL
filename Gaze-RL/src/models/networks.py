@@ -25,7 +25,7 @@ class ChannelCNN(nn.Module):
         self.ln = nn.LayerNorm(feature_dim)
         
     def forward(self, x, gaze_heatmap):
-        if gaze_heatmap:
+        if gaze_heatmap is not None:
             x = torch.cat([x, gaze_heatmap], dim=1)
         if len(x.shape) == 4 and x.shape[1] != 3 and x.shape[1] != 4:
             if x.shape[3] == 3 or x.shape[3] == 4:
@@ -110,7 +110,7 @@ class GazeAttnCNN(nn.Module):
         # Global pooling and final projection
         return self.fc(fused)
 
-class WeightedCNN:
+class WeightedCNN(nn.Module):
     def __init__(self, use_gaze=False, feature_dim=512):
         super().__init__()
         self.use_gaze = use_gaze
