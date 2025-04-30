@@ -126,6 +126,8 @@ def parse_args():
     parser.add_argument("--gaze_integration", type=str, default="channel",
                         choices=["channel", "bottleneck", "weighted"],
                         help="Method to integrate gaze information")
+    parser.add_argument("--record_freq", type=int, default=5,
+                    help="Record every N-th episode (default: 5)")
     return parser.parse_args()
 
 def load_gaze_model(checkpoint_path):
@@ -153,7 +155,7 @@ def load_gaze_model(checkpoint_path):
         print(traceback.format_exc())
         return None
 
-def create_env(config, target_object, gaze_model=None, video_dir=None):
+def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=5):
     """Create environment with gaze integration"""
     
     # Update config for optimization
@@ -196,8 +198,8 @@ def create_env(config, target_object, gaze_model=None, video_dir=None):
 
         # Add video recording as the final wrapper if video_dir is provided
         if video_dir is not None:
-            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir)
-            print(f"Video recording enabled: saving to {video_dir}")
+            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir, record_freq=record_freq)
+            print(f"Video recording enabled: recording every {record_freq} episodes to {video_dir}")
         
         # Print environment configuration
         print(f"Created environment for target object: {target_object}")
@@ -427,7 +429,7 @@ def main():
     os.makedirs(video_dir, exist_ok=True)
     
     # Create environment with gaze
-    env_fn = create_env(config, args.target, gaze_model=gaze_model, video_dir=video_dir)
+    env_fn = create_env(config, args.target, gaze_model=gaze_model, video_dir=video_dir, record_freq=args.record_freq)
     env = DummyVecEnv([env_fn])
     
     # Train with gaze

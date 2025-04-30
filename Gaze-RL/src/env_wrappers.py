@@ -10,67 +10,89 @@ from datetime import datetime
 class VideoRecorderWrapper(Wrapper):
     """Records episodes as videos."""
     
-    def __init__(self, env, video_dir="videos"):
+    def __init__(self, env, video_dir="videos", record_freq=5, video_quality=0.95):
+        """
+        Initialize the video recorder wrapper.
+        Args:
+            env: The environment to wrap
+            video_dir: Directory to save videos
+            record_freq: Record every N-th episode (default: 5)
+            video_quality: Quality of the video (0.0-1.0, higher is better)
+        """
         super().__init__(env)
         self.video_dir = video_dir
+        self.record_freq = record_freq
+        self.video_quality = video_quality
         self.frames = []
-        
+        self.episode_count = 0
+        self.recording = False
         # Create video directory if it doesn't exist
         os.makedirs(video_dir, exist_ok=True)
-    
+
     def reset(self, **kwargs):
         obs, info = self.env.reset(**kwargs)
-        
-        # Clear frames buffer at start of episode
-        self.frames = []
-        
-        # Capture the initial frame (handle both dict and array observations)
-        if hasattr(self.env.unwrapped, 'last_image'):
-            # Direct access to the AI2Thor last rendered image
-            self.frames.append(self.env.unwrapped.last_image.copy())
-        elif isinstance(obs, dict) and "rgb" in obs:
-            self.frames.append(obs["rgb"].copy())
-        elif len(obs.shape) == 3 and obs.shape[2] == 3:
-            # Simple RGB observation
-            self.frames.append(obs.copy())
-        else:
-            # Observation might be flattened or have gaze channel
-            # Try to extract RGB information
-            try:
-                # For flattened observations with known shape
-                rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
-                self.frames.append(rgb_obs)
-            except:
-                print("Warning: Could not capture frame for video recording")
-        
+
+        # Increment episode counter and determine if we should record
+        self.episode_count += 1
+        self.recording = (self.episode_count % self.record_freq == 0)
+
+        if self.recording:
+            print(f"Recording episode {self.episode_count}...")
+            # Clear frames buffer at start of episode
+            self.frames = []
+            # Capture the initial frame (handle both dict and array observations)
+            if hasattr(self.env.unwrapped, 'last_image'):
+                # Direct access to the AI2Thor last rendered image
+                frame = self.env.unwrapped.last_image.copy()
+                self.frames.append(frame)
+            elif isinstance(obs, dict) and "rgb" in obs:
+                frame = obs["rgb"].copy()
+                self.frames.append(frame)
+            elif len(obs.shape) == 3 and obs.shape[2] == 3:
+                # Simple RGB observation
+                frame = obs.copy()
+                self.frames.append(frame)
+            else:
+                # Observation might be flattened or have gaze channel
+                # Try to extract RGB information
+                try:
+                    # For flattened observations with known shape
+                    rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
+                    self.frames.append(rgb_obs)
+                except:
+                    print("Warning: Could not capture frame for video recording")
         return obs, info
-    
+
     def step(self, action):
         obs, reward, terminated, truncated, info = self.env.step(action)
-        
-        # Capture frame (handle both dict and array observations)
-        if hasattr(self.env.unwrapped, 'last_image'):
-            # Direct access to the AI2Thor last rendered image
-            self.frames.append(self.env.unwrapped.last_image.copy())
-        elif isinstance(obs, dict) and "rgb" in obs:
-            self.frames.append(obs["rgb"].copy())
-        elif len(obs.shape) == 3 and obs.shape[2] == 3:
-            # Simple RGB observation
-            self.frames.append(obs.copy())
-        else:
-            # Observation might be flattened or have gaze channel
-            # Try to extract RGB information
-            try:
-                # For flattened observations with known shape
-                rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
-                self.frames.append(rgb_obs)
-            except:
-                pass  # Skip this frame if we can't process it
-        
-        # Save video if episode is done
-        if (terminated or truncated) and self.frames:
-            self.save_video()
-        
+        # Only capture frame if we're recording this episode
+        if self.recording:
+            # Capture frame (handle both dict and array observations)
+            if hasattr(self.env.unwrapped, 'last_image'):
+                # Direct access to the AI2Thor last rendered image
+                frame = self.env.unwrapped.last_image.copy()
+                self.frames.append(frame)
+            elif isinstance(obs, dict) and "rgb" in obs:
+                frame = obs["rgb"].copy()
+                self.frames.append(frame)
+            elif len(obs.shape) == 3 and obs.shape[2] == 3:
+                # Simple RGB observation
+                frame = obs.copy()
+                self.frames.append(frame)
+            else:
+                # Observation might be flattened or have gaze channel
+                # Try to extract RGB information
+                try:
+                    # For flattened observations with known shape
+                    rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
+                    self.frames.append(rgb_obs)
+
+                except:
+                    pass  # Skip this frame if we can't process it
+
+            # Save video if episode is done
+            if (terminated or truncated) and self.frames:
+                self.save_video()
         return obs, reward, terminated, truncated, info
     
     def save_video(self):
