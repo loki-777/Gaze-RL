@@ -218,13 +218,9 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="gaze_guided",
                         help="Experiment name for logging")
-    # Add integration method parameter
-    parser.add_argument("--gaze_integration", type=str, default="channel",
-                        choices=["channel", "bottleneck", "weighted"],
-                        help="Method to integrate gaze information")
     return parser.parse_args()
 
-def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="channel"):
+def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="ChannelCNN"):
     """Train an agent with gaze guidance"""
     
     # Create timestamp for unique run identification
@@ -418,7 +414,7 @@ def main():
     gaze_checkpoint_path = args.gaze_checkpoint if args.gaze_checkpoint else config["gaze"]["model_path"]
     
     # Get integration method - command line arg overrides config
-    gaze_integration = args.gaze_integration if args.gaze_integration else config["gaze"]["integration_method"]
+    gaze_integration = config["model"]["features_extractor"]
     
     # Load pretrained gaze model
     gaze_model = load_gaze_model(gaze_checkpoint_path)
