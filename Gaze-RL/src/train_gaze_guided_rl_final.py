@@ -126,8 +126,8 @@ def parse_args():
     parser.add_argument("--gaze_integration", type=str, default="channel",
                         choices=["channel", "bottleneck", "weighted"],
                         help="Method to integrate gaze information")
-    parser.add_argument("--record_freq", type=int, default=5,
-                    help="Record every N-th episode (default: 5)")
+    parser.add_argument("--record_freq", type=int, default=20,
+                    help="Record every N-th episode (default: 20)")
     return parser.parse_args()
 
 def load_gaze_model(checkpoint_path):
@@ -155,7 +155,7 @@ def load_gaze_model(checkpoint_path):
         print(traceback.format_exc())
         return None
 
-def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=5):
+def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=20):
     """Create environment with gaze integration"""
     
     # Update config for optimization
