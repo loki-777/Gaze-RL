@@ -122,7 +122,7 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="gaze_guided",
                         help="Experiment name for logging")
-    # Gaze Addition Variations
+    # Gaze Integration Variations
     parser.add_argument("--gaze_integration", type=str, default="channel",
                         choices=["channel", "bottleneck", "weighted"],
                         help="Method to integrate gaze information")
@@ -218,6 +218,10 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="gaze_guided",
                         help="Experiment name for logging")
+    # Gaze Integration Variations
+    parser.add_argument("--gaze_integration", type=str, default="channel",
+                        choices=["channel", "bottleneck", "weighted"],
+                        help="Method to integrate gaze information")
     return parser.parse_args()
 
 def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="ChannelCNN"):
@@ -410,17 +414,29 @@ def main():
     # Update config with command line arguments
     config["environment"]["target_object"] = args.target
     
+    # Map integration method to feature extractor class name
+    integration_to_extractor = {
+        "channel": "ChannelCNN",
+        "bottleneck": "GazeAttnCNN",
+        "weighted": "WeightedCNN"
+    }
+    
+    # Get integration method from command line arg
+    gaze_integration = args.gaze_integration
+    
+    # Update config with the correct feature extractor
+    config["model"]["features_extractor"] = integration_to_extractor[gaze_integration]
+    config["model"]["use_gaze"] = True
+    
     # Get gaze checkpoint path - command line arg overrides config
     gaze_checkpoint_path = args.gaze_checkpoint if args.gaze_checkpoint else config["gaze"]["model_path"]
-    
-    # Get integration method - command line arg overrides config
-    gaze_integration = config["model"]["features_extractor"]
     
     # Load pretrained gaze model
     gaze_model = load_gaze_model(gaze_checkpoint_path)
     
     print("\n" + "="*60)
     print(f"TRAINING WITH GAZE GUIDANCE ({gaze_integration} integration)")
+    print(f"Using feature extractor: {config['model']['features_extractor']}")
     print("="*60 + "\n")
     
     # Create environment with gaze
@@ -447,4 +463,8 @@ if __name__ == "__main__":
 # Example usage:
 # python src/train_gaze_guided_rl_final.py --exp_name gaze_guided_search --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt
 
-# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt --gaze_integration bottleneck
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 1000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt --gaze_integration bottleneck
+
+# --gaze_integration channel will use ChannelCNN
+# --gaze_integration bottleneck will use GazeAttnCNN
+# --gaze_integration weighted will use WeightedCNN
