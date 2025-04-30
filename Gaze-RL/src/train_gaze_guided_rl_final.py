@@ -18,7 +18,7 @@ import pytorch_lightning as pl
 
 # Import your environment and wrappers
 from environments.ai2thor_gymnasium_env import AI2ThorEnv
-from env_wrappers import FlattenObservationWrapper, GazeEnvWrapper, GazePreprocessEnvWrapper
+from env_wrappers import FlattenObservationWrapper, GazeEnvWrapper, GazePreprocessEnvWrapper, VideoRecorderWrapper
 from src.models.agents import GazePPO
 from src.models.lightning_module import GazeLightningModule
 
@@ -153,7 +153,7 @@ def load_gaze_model(checkpoint_path):
         print(traceback.format_exc())
         return None
 
-def create_env(config, target_object, gaze_model=None):
+def create_env(config, target_object, gaze_model=None, video_dir=None):
     """Create environment with gaze integration"""
     
     # Update config for optimization
@@ -193,6 +193,11 @@ def create_env(config, target_object, gaze_model=None):
         
         # Wrap with Monitor to track episode rewards
         monitor_env = Monitor(env)
+
+        # Add video recording as the final wrapper if video_dir is provided
+        if video_dir is not None:
+            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir)
+            print(f"Video recording enabled: saving to {video_dir}")
         
         # Print environment configuration
         print(f"Created environment for target object: {target_object}")
@@ -416,8 +421,13 @@ def main():
     print(f"Using feature extractor: {config['model']['features_extractor']}")
     print("="*60 + "\n")
     
+    # Create video directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_dir = os.path.join("videos", f"{args.exp_name}_{gaze_integration}_{timestamp}")
+    os.makedirs(video_dir, exist_ok=True)
+    
     # Create environment with gaze
-    env_fn = create_env(config, args.target, gaze_model=gaze_model)
+    env_fn = create_env(config, args.target, gaze_model=gaze_model, video_dir=video_dir)
     env = DummyVecEnv([env_fn])
     
     # Train with gaze
