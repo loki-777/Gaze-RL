@@ -201,29 +201,6 @@ def create_env(config, target_object, gaze_model=None):
     
     return _init
 
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train Gaze-Guided RL agent for object search")
-    parser.add_argument("--config", type=str, default="configs/default.yaml", 
-                        help="Path to config file")
-    parser.add_argument("--gaze_config", type=str, default="configs/gaze_config.yaml",
-                        help="Path to gaze model config file")
-    parser.add_argument("--gaze_checkpoint", type=str, default=None,
-                        help="Path to pretrained gaze model checkpoint (.ckpt file), overrides config")
-    parser.add_argument("--target", type=str, default="Microwave",
-                        help="Target object to search")
-    parser.add_argument("--log_dir", type=str, default="logs",
-                        help="Directory to save logs")
-    parser.add_argument("--timesteps", type=int, default=50000,
-                        help="Total timesteps for training")
-    # Add experiment name parameter
-    parser.add_argument("--exp_name", type=str, default="gaze_guided",
-                        help="Experiment name for logging")
-    # Gaze Integration Variations
-    parser.add_argument("--gaze_integration", type=str, default="channel",
-                        choices=["channel", "bottleneck", "weighted"],
-                        help="Method to integrate gaze information")
-    return parser.parse_args()
-
 def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="ChannelCNN"):
     """Train an agent with gaze guidance"""
     
