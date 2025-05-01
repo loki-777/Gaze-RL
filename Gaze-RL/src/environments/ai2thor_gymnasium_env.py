@@ -1,3 +1,20 @@
+
+import os
+# ── FORCE AI2-THOR TO USE GLX (no Vulkan) ──────────────
+os.environ["AI2THOR_BUILD"] = "LinuxGL"
+
+import ai2thor.controller as _ctrl
+# Subclass to force platform="LinuxGL" and headless=True
+class _GLXController(_ctrl.Controller):
+    def __init__(self, *args, **kwargs):
+        kwargs["platform"] = "LinuxGL"
+        kwargs["headless"] = True
+        super().__init__(*args, **kwargs)
+
+# Monkey-patch so every Controller() is our GLX version
+_ctrl.Controller = _GLXController
+# ────────────────────────────────────────────────────────
+
 import gymnasium as gym
 import numpy as np
 import ai2thor.controller
