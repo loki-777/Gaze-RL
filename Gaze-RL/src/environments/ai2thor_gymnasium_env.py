@@ -31,7 +31,7 @@ class AI2ThorEnv(gym.Env):
         
         # Initialize AI2-THOR controller
         self.controller = ai2thor.controller.Controller(
-            platform="Linux64",
+            platform="LinuxGL",
             width=config.get("width", 224),
             height=config.get("height", 224),
             gridSize=config.get("grid_size", 0.25),
@@ -147,7 +147,7 @@ class AI2ThorEnv(gym.Env):
                         pass
                 
                 self.controller = ai2thor.controller.Controller(
-                    platform="Linux64",
+                    platform="LinuxGL",
                     width=self.config.get("width", 224),
                     height=self.config.get("height", 224),
                     gridSize=self.config.get("grid_size", 0.25),
