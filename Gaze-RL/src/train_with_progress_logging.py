@@ -17,6 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 # Import your environment
 from environments.ai2thor_gymnasium_env import AI2ThorEnv
+from env_wrappers import VideoRecorderWrapper, RetryTimeoutWrapper
 
 # Custom callback to print training progress
 class ProgressCallback(BaseCallback):
@@ -112,9 +113,11 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="baseline",
                         help="Experiment name for logging")
+    parser.add_argument("--record_freq", type=int, default=100,
+                    help="Record every N-th episode (default: 100)")
     return parser.parse_args()
 
-def create_env(config, target_object):
+def create_env(config, target_object, video_dir=None, record_freq=100):
     """Create environment with proper settings for Mac"""
     
     # Update config for Mac optimization
@@ -122,9 +125,9 @@ def create_env(config, target_object):
     env_config["target_object"] = target_object
     env_config["width"] = 224
     env_config["height"] = 224
-    env_config["grid_size"] = 0.25
+    env_config["grid_size"] = 0.5
     # Add Mac-friendly settings
-    env_config["quality"] = "Medium"
+    env_config["quality"] = "Very Low"
     env_config["shadows"] = False
     
     def _init():
@@ -133,9 +136,18 @@ def create_env(config, target_object):
             env_config,
             render_mode=None  # No rendering during training for performance
         )
+
+        # Add the retry wrapper before the monitor
+        env = RetryTimeoutWrapper(env, max_retries=3, retry_delay=1.0)
         
         # Wrap with Monitor to track episode rewards
         monitor_env = Monitor(env)
+
+        # Add video recording as the final wrapper if video_dir is provided
+        if video_dir is not None:
+            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir, record_freq=record_freq)
+            print(f"Video recording enabled: recording every {record_freq} episodes to {video_dir}")
+        
         
         # Print when a new environment is created
         print(f"Created environment for target object: {target_object}")
@@ -213,11 +225,14 @@ def main():
         with open(config_path, "w") as f:
             yaml.dump(config, f)
         
-        logger.info("Creating environment...")
-        # Create environment function
-        env_fn = create_env(config, args.target)
+
+        # Create video directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_dir = os.path.join("videos", f"{args.exp_name}_baseline_ppo_{timestamp}")
+        os.makedirs(video_dir, exist_ok=True)
         
-        # Create vectorized environment
+        logger.info("Creating environment...")
+        env_fn = create_env(config, args.target, video_dir=video_dir, record_freq=args.record_freq)
         logger.info("Initializing vectorized environment...")
         env = DummyVecEnv([env_fn])
         
@@ -331,4 +346,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python src/train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 50000
+# python src/train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 100000

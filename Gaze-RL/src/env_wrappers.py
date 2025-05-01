@@ -6,7 +6,30 @@ from typing import Dict, Tuple, Any, Optional
 import cv2
 import os
 from datetime import datetime
+import time
 
+class RetryTimeoutWrapper(Wrapper):
+    """Wrapper to handle TimeoutError and retry actions"""
+    
+    def __init__(self, env, max_retries=3, retry_delay=1.0):
+        super().__init__(env)
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+    
+    def step(self, action):
+        for attempt in range(self.max_retries):
+            try:
+                return self.env.step(action)
+            except TimeoutError as e:
+                if attempt < self.max_retries - 1:
+                    print(f"TimeoutError encountered, retrying action (attempt {attempt+1}/{self.max_retries})...")
+                    time.sleep(self.retry_delay)
+                else:
+                    print(f"Max retries exceeded, returning empty observation with termination")
+                    # Create a zero-filled observation with the proper shape
+                    zero_obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+                    # Return a terminal state with a small penalty
+                    return zero_obs, -1.0, True, True, {"timeout": True}
 class VideoRecorderWrapper(Wrapper):
     """Records episodes as videos."""
     
