@@ -152,6 +152,7 @@ class AI2ThorEnv(gym.Env):
                     fieldOfView=self.config.get("fov", 90),
                     renderDepthImage=self.config.get("depth", True),
                     renderInstanceSegmentation=self.config.get("segmentation", True),
+                    headless=True,
                 )
         
         # If we've exhausted attempts, raise the error
