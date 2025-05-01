@@ -37,6 +37,7 @@ class AI2ThorEnv(gym.Env):
             fieldOfView=config.get("fov", 90),
             renderDepthImage=config.get("depth", True),
             renderInstanceSegmentation=config.get("segmentation", True),
+            headless=True,
         )
         
         # Define action space: Move (4 directions), Rotate (2 directions), Look (up/down)

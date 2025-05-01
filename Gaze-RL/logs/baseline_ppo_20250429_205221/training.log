@@ -1,0 +1,35 @@
+2025-04-29 20:52:21,923 - INFO - 
+============================================================
+2025-04-29 20:52:21,923 - INFO - Experiment: baseline_ppo
+2025-04-29 20:52:21,923 - INFO - Experiment ID: baseline_ppo_20250429_205221
+2025-04-29 20:52:21,923 - INFO - Starting training run at 2025-04-29 20:52:21
+2025-04-29 20:52:21,923 - INFO - Device: MPS (Apple GPU) (Apple Silicon)
+2025-04-29 20:52:21,923 - INFO - Target object: Microwave
+2025-04-29 20:52:21,923 - INFO - Total timesteps: 50000
+2025-04-29 20:52:21,923 - INFO - ============================================================
+
+2025-04-29 20:52:21,927 - INFO - Creating environment...
+2025-04-29 20:52:21,927 - INFO - Initializing vectorized environment...
+2025-04-29 20:54:37,784 - INFO - Initialize return: {'cameraNearPlane': 0.009999999776482582, 'cameraFarPlane': 20.0}
+2025-04-29 20:54:37,786 - INFO - Creating PPO model...
+2025-04-29 20:54:39,406 - INFO - 
+Starting training...
+2025-04-29 20:54:39,407 - INFO - Experiment: baseline_ppo
+2025-04-29 20:54:39,407 - INFO - Target: Microwave
+2025-04-29 20:54:39,407 - INFO - Timesteps: 50000
+2025-04-29 20:54:39,407 - INFO - Using device: mps
+
+2025-04-29 21:18:03,079 - INFO - 
+============================================================
+2025-04-29 21:18:03,080 - INFO - TRAINING COMPLETED!
+2025-04-29 21:18:03,080 - INFO - Experiment: baseline_ppo
+2025-04-29 21:18:03,080 - INFO - Total training time: 00:23:23
+2025-04-29 21:18:03,080 - INFO - Episodes completed: 100
+2025-04-29 21:18:03,080 - INFO - Final mean reward: 26.10
+2025-04-29 21:18:03,081 - INFO - ============================================================
+
+2025-04-29 21:18:03,427 - INFO - Model saved to logs/baseline_ppo_20250429_205221/models/ppo_ai2thor_final
+2025-04-29 21:18:03,431 - INFO - Best episode: #44
+2025-04-29 21:18:03,431 - INFO -   Reward: 262.03
+2025-04-29 21:18:03,431 - INFO -   Length: 500 steps
+2025-04-29 21:18:03,607 - INFO - Environment closed

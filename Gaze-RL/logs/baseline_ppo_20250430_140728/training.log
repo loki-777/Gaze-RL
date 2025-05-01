@@ -1,0 +1,60 @@
+2025-04-30 14:07:28,351 - INFO - 
+============================================================
+2025-04-30 14:07:28,351 - INFO - Experiment: baseline_ppo
+2025-04-30 14:07:28,351 - INFO - Experiment ID: baseline_ppo_20250430_140728
+2025-04-30 14:07:28,351 - INFO - Starting training run at 2025-04-30 14:07:28
+2025-04-30 14:07:28,351 - INFO - Device: MPS (Apple GPU) (Apple Silicon)
+2025-04-30 14:07:28,351 - INFO - Target object: Microwave
+2025-04-30 14:07:28,351 - INFO - Total timesteps: 1000000
+2025-04-30 14:07:28,351 - INFO - ============================================================
+
+2025-04-30 14:07:28,356 - INFO - Creating environment...
+2025-04-30 14:07:28,356 - INFO - Initializing vectorized environment...
+2025-04-30 14:07:31,957 - INFO - Initialize return: {'cameraNearPlane': 0.009999999776482582, 'cameraFarPlane': 20.0}
+2025-04-30 14:07:31,958 - INFO - Creating PPO model...
+2025-04-30 14:07:34,302 - INFO - 
+Starting training...
+2025-04-30 14:07:34,303 - INFO - Experiment: baseline_ppo
+2025-04-30 14:07:34,303 - INFO - Target: Microwave
+2025-04-30 14:07:34,303 - INFO - Timesteps: 1000000
+2025-04-30 14:07:34,303 - INFO - Using device: mps
+
+2025-04-30 14:26:31,744 - ERROR - 
+ERROR during training: Error encountered when running action {'action': 'RotateLeft', 'sequenceId': 329} in scene FloorPlan28_physics.
+2025-04-30 14:26:31,758 - ERROR - Traceback (most recent call last):
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/ai2thor/controller.py", line 979, in step
+    self.last_event = self.server.receive()
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/ai2thor/fifo_server.py", line 229, in receive
+    metadata, files = self._recv_message(
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/ai2thor/fifo_server.py", line 145, in _recv_message
+    header = self._read_with_timeout(
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/ai2thor/fifo_server.py", line 134, in _read_with_timeout
+    raise TimeoutError(f"Reading from AI2-THOR backend timed out (using {timeout}s) timeout.")
+TimeoutError: Reading from AI2-THOR backend timed out (using 100.0s) timeout.
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/Users/yu/Documents/nyu/rl/project/Gaze-RL/Gaze-RL/src/train_with_progress_logging.py", line 251, in main
+    model.learn(
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/ppo/ppo.py", line 308, in learn
+    return super().learn(
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 259, in learn
+    continue_training = self.collect_rollouts(self.env, callback, self.rollout_buffer, n_rollout_steps=self.n_steps)
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/on_policy_algorithm.py", line 178, in collect_rollouts
+    new_obs, rewards, dones, infos = env.step(clipped_actions)
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/vec_env/base_vec_env.py", line 197, in step
+    return self.step_wait()
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/vec_env/vec_transpose.py", line 95, in step_wait
+    observations, rewards, dones, infos = self.venv.step_wait()
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/vec_env/dummy_vec_env.py", line 58, in step_wait
+    obs, self.buf_rews[env_idx], terminated, truncated, self.buf_infos[env_idx] = self.envs[env_idx].step(
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/stable_baselines3/common/monitor.py", line 94, in step
+    observation, reward, terminated, truncated, info = self.env.step(action)
+  File "/Users/yu/Documents/nyu/rl/project/Gaze-RL/Gaze-RL/src/environments/ai2thor_gymnasium_env.py", line 178, in step
+    event = self.controller.step(thor_action)
+  File "/opt/anaconda3/envs/gaze-rl-stable/lib/python3.9/site-packages/ai2thor/controller.py", line 997, in step
+    raise (TimeoutError if isinstance(e, TimeoutError) else RuntimeError)(
+TimeoutError: Error encountered when running action {'action': 'RotateLeft', 'sequenceId': 329} in scene FloorPlan28_physics.
+
+2025-04-30 14:26:31,878 - INFO - Environment closed

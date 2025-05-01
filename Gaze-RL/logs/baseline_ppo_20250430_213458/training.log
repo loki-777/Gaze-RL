@@ -1,0 +1,21 @@
+2025-04-30 21:34:58,758 - INFO - 
+============================================================
+2025-04-30 21:34:58,758 - INFO - Experiment: baseline_ppo
+2025-04-30 21:34:58,758 - INFO - Experiment ID: baseline_ppo_20250430_213458
+2025-04-30 21:34:58,758 - INFO - Starting training run at 2025-04-30 21:34:58
+2025-04-30 21:34:58,758 - INFO - Device: MPS (Apple GPU) (Apple Silicon)
+2025-04-30 21:34:58,758 - INFO - Target object: Microwave
+2025-04-30 21:34:58,759 - INFO - Total timesteps: 1000000
+2025-04-30 21:34:58,759 - INFO - ============================================================
+
+2025-04-30 21:34:58,762 - INFO - Creating environment...
+2025-04-30 21:34:58,762 - INFO - Initializing vectorized environment...
+2025-04-30 21:35:02,054 - INFO - Initialize return: {'cameraNearPlane': 0.009999999776482582, 'cameraFarPlane': 20.0}
+2025-04-30 21:35:02,055 - INFO - Creating PPO model...
+2025-04-30 21:35:03,566 - INFO - 
+Starting training...
+2025-04-30 21:35:03,566 - INFO - Experiment: baseline_ppo
+2025-04-30 21:35:03,566 - INFO - Target: Microwave
+2025-04-30 21:35:03,566 - INFO - Timesteps: 1000000
+2025-04-30 21:35:03,566 - INFO - Using device: mps
+

@@ -1,0 +1,44 @@
+data:
+  batch_size: 32
+  heatmap_dir: data/salicon_processed/heatmaps/train
+  img_dir: data/salicon_processed/images/train
+environment:
+  depth: true
+  fov: 90
+  grid_size: 0.5
+  height: 224
+  max_steps: 500
+  segmentation: true
+  target_object: Microwave
+  width: 224
+gaze:
+  epochs: 100
+  integration_method: channel
+  lr: 0.0001
+  model_path: logs/epoch=19-step=6260.ckpt
+  train_batch_size: 32
+  weight_decay: 1.0e-05
+logging:
+  checkpoint_dir: checkpoints
+  experiment_name: gaze_rl_search
+  log_dir: logs
+  video_dir: videos
+model:
+  batch_size: 64
+  clip_range: 0.2
+  ent_coef: 0.01
+  features_extractor: WeightedCNN
+  gae_lambda: 0.95
+  gamma: 0.99
+  lr: 0.0003
+  max_grad_norm: 0.5
+  n_epochs: 4
+  n_steps: 128
+  use_gaze: true
+  vf_coef: 0.5
+training:
+  eval_freq: 5000
+  n_envs: 4
+  save_freq: 10000
+  total_timesteps: 1000000
+  use_gpu: true
