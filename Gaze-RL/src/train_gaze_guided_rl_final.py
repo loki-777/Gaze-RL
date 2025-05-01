@@ -126,8 +126,8 @@ def parse_args():
     parser.add_argument("--gaze_integration", type=str, default="channel",
                         choices=["channel", "bottleneck", "weighted"],
                         help="Method to integrate gaze information")
-    parser.add_argument("--record_freq", type=int, default=20,
-                    help="Record every N-th episode (default: 20)")
+    parser.add_argument("--record_freq", type=int, default=1000,
+                    help="Record every N-th episode (default: 1000)")
     return parser.parse_args()
 
 def load_gaze_model(checkpoint_path):
@@ -450,9 +450,9 @@ if __name__ == "__main__":
     main()
 
 # Example usage:
-# python src/train_gaze_guided_rl_final.py --exp_name gaze_guided_search --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_exp --target Microwave --timesteps 100000 --gaze_checkpoint logs/RESNET.ckpt
 
-# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 1000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt --gaze_integration bottleneck
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 100000 --gaze_checkpoint logs/RESNET.ckpt --gaze_integration channel
 
 # --gaze_integration channel will use ChannelCNN
 # --gaze_integration bottleneck will use GazeAttnCNN
