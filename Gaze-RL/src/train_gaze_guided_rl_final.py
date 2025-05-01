@@ -155,7 +155,7 @@ def load_gaze_model(checkpoint_path):
         print(traceback.format_exc())
         return None
 
-def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=20):
+def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=1000):
     """Create environment with gaze integration"""
     
     # Update config for optimization
