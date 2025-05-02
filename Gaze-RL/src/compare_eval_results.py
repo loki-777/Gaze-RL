@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 from scipy.signal import savgol_filter
 import matplotlib.colors as mcolors
 from matplotlib.lines import Line2D
+import seaborn as sns
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Compare multiple RL evaluation results")
@@ -93,26 +94,39 @@ def get_experiment_name(data, custom_label=None):
 
 def plot_comparison(results_data, output_dir, window_size=9, title="Reward Comparison", 
                    custom_labels=None, figsize=(12, 8), dpi=300):
-    """Create comparison plots for multiple result files"""
+    """Create visually appealing comparison plots using Seaborn and advanced styling"""
     # Create output directory
     os.makedirs(output_dir, exist_ok=True)
     
-    # Set up colors - use tab10 colormap for distinct colors
-    colors = plt.cm.tab10.colors
+    # Import seaborn for enhanced styling
+    import seaborn as sns
     
-    # Create the main rewards over episodes plot
-    plt.figure(figsize=figsize)
+    # Set up better seaborn styling
+    sns.set_theme(style="whitegrid")
+    sns.set_context("notebook", font_scale=1.2)
     
-    # Track max episodes for x-axis
+    # Better color palette from seaborn
+    palette = sns.color_palette("bright", n_colors=10)
+    
+    # Create the main rewards over episodes plot with seaborn styling
+    fig, ax = plt.subplots(figsize=figsize)
+    
+    # Add a subtle background color gradient for better aesthetics
+    from matplotlib.colors import LinearSegmentedColormap
+    cmap = LinearSegmentedColormap.from_list('subtle_gradient', ['#f8f9fa', '#ffffff'], N=100)
+    ax.imshow(np.zeros((2, 2)), extent=[-1000, 1000, -1000, 1000], cmap=cmap, 
+              aspect='auto', zorder=-1, alpha=0.8)
+    
+    # Track max episodes and rewards for axis limits
     max_episodes = 0
+    min_reward = float('inf')
+    max_reward = float('-inf')
     
-    # For legend entries
+    # For legend entries and summary data
     legend_elements = []
-    
-    # Summary metrics for a table
     summary_data = []
     
-    # Plot each result
+    # Plot each result with enhanced seaborn styling
     for i, (filepath, data) in enumerate(results_data.items()):
         if not data:
             continue
@@ -122,25 +136,45 @@ def plot_comparison(results_data, output_dir, window_size=9, title="Reward Compa
         custom_label = None if custom_labels is None else custom_labels[i] if i < len(custom_labels) else None
         name = get_experiment_name(data, custom_label)
         
-        # Update max episodes
+        # Update max episodes and reward ranges
         max_episodes = max(max_episodes, len(rewards))
+        min_reward = min(min_reward, min(rewards))
+        max_reward = max(max_reward, max(rewards))
         
         # Create episode indices
         episodes = np.arange(1, len(rewards) + 1)
         
         # Get color for this experiment
-        color = colors[i % len(colors)]
+        color = palette[i % len(palette)]
         
-        # Smooth data and plot (no background raw data)
+        # Prepare for both raw and smoothed data
         if len(rewards) >= 3:  # Only smooth if we have enough data points
             smoothed_rewards = smooth_data(rewards, window_size)
-            plt.plot(episodes, smoothed_rewards, color=color, linewidth=3, label=name)
+            
+            # Plot the main line with seaborn
+            sns.lineplot(
+                x=episodes, 
+                y=smoothed_rewards, 
+                color=color, 
+                linewidth=3, 
+                label=name,
+                zorder=3,
+                alpha=0.9
+            )
             
             # Add to legend
             legend_elements.append(Line2D([0], [0], color=color, lw=3, label=name))
         else:
             # Not enough data for smoothing, just use the original
-            plt.plot(episodes, rewards, color=color, linewidth=3, label=name)
+            sns.lineplot(
+                x=episodes, 
+                y=rewards, 
+                color=color, 
+                linewidth=3, 
+                label=name,
+                zorder=3,
+                alpha=0.9
+            )
             
             # Add to legend
             legend_elements.append(Line2D([0], [0], color=color, lw=3, label=name))
@@ -158,32 +192,60 @@ def plot_comparison(results_data, output_dir, window_size=9, title="Reward Compa
             'Episodes': len(rewards)
         })
     
-    # Set plot labels and title
-    plt.xlabel('Episode', fontsize=12)
-    plt.ylabel('Reward', fontsize=12)
-    plt.title(title, fontsize=14)
+    # Enhance axes with seaborn styling
+    sns.despine(left=False, bottom=False, right=False, top=False)
     
-    # Add grid and legend
-    plt.grid(True, alpha=0.3)
-    plt.legend(handles=legend_elements, loc='upper left', fontsize=10)
+    # Set plot labels and title with seaborn styling
+    ax.set_xlabel('Episode', fontsize=14, fontweight='bold', labelpad=10)
+    ax.set_ylabel('Reward', fontsize=14, fontweight='bold', labelpad=10)
+    plt.title(title, fontsize=16, fontweight='bold', pad=20)
     
-    # Adjust x-axis limits
-    plt.xlim(1, max_episodes)
+    # Create a custom legend with seaborn styling
+    legend = ax.legend(
+        handles=legend_elements,
+        loc='best',
+        fontsize=12,
+        frameon=True,
+        facecolor='white',
+        framealpha=0.9,
+        edgecolor='lightgrey',
+        borderpad=1,
+        title="Methods",
+        title_fontsize=13
+    )
+    legend.get_frame().set_linewidth(0.5)
     
-    # Add explanatory text about smoothing
-    plt.figtext(0.02, 0.02, f"Note: Lines show smoothed rewards (window size={window_size})", 
-                fontsize=8, ha='left')
+    # Add a subtle watermark annotation for smoothing info
+    ax.annotate(
+        f"Smoothed (window size={window_size})",
+        xy=(0.98, 0.02),
+        xycoords='axes fraction',
+        fontsize=10,
+        ha='right',
+        va='bottom',
+        color='#999999',
+        style='italic',
+        bbox=dict(boxstyle="round,pad=0.3", fc="white", ec="lightgrey", alpha=0.8)
+    )
     
-    # Tight layout and save figure
+    # Adjust spacing and limits
     plt.tight_layout()
-    reward_plot_path = os.path.join(output_dir, 'reward_comparison.png')
-    plt.savefig(reward_plot_path, dpi=dpi)
-    print(f"Saved reward comparison plot to {reward_plot_path}")
     
-    # Create a summary plot with bar charts
+    # Adjust x-axis limits with padding
+    ax.set_xlim(1, max_episodes + int(max_episodes * 0.05))
+    
+    # Adjust y-axis limits with padding for better visualization
+    y_range = max_reward - min_reward
+    ax.set_ylim(min_reward - y_range * 0.05, max_reward + y_range * 0.1)
+    
+    # Save the enhanced figure
+    reward_plot_path = os.path.join(output_dir, 'reward_comparison.png')
+    plt.savefig(reward_plot_path, dpi=dpi, bbox_inches='tight')
+    print(f"Saved enhanced reward comparison plot to {reward_plot_path}")
+    
+    # Create a summary chart
     create_summary_chart(summary_data, output_dir, figsize, dpi)
     
-    # Return the paths to the created plots
     return reward_plot_path
 
 def create_summary_chart(summary_data, output_dir, figsize, dpi):
@@ -268,4 +330,23 @@ if __name__ == "__main__":
     main()
 
 # Example usage:
-# python src/compare_eval_results.py --results evaluation_results/eval_baseline_ppo_20250502_015604/baseline_ppo_results.yaml evaluation_results/eval_gaze_expt_channel_20250430_224958/channel_results.yaml evaluation_results/eval_gaze_expt_bottleneck_20250430_234927/bottleneck_results.yaml evaluation_results/eval_gaze_expt_weighted_20250501_101103/weighted_results.yaml --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" --title "AI2THOR Object Search Performance, Target: Microwave" --output comparison_plots
+# python src/compare_eval_results.py --results 
+# Gaze-RL/evaluation_results/eval_baseline_ppo_floorplan30_20250502_033454/baseline_ppo_floorplan30_results.yaml
+# Gaze-RL/evaluation_results/eval_channel_floorplan30_20250502_034142/channel_results.yaml 
+# Gaze-RL/evaluation_results/eval_bottleneck_floorplan30_20250502_034316/bottleneck_results.yaml
+# Gaze-RL/evaluation_results/eval_weighted_floorplan30_20250502_042117/weighted_results.yaml
+# --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" 
+# --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 30 - Evaluation" 
+# --output comparison_plots_eval_floorplan30_all
+
+
+# python src/compare_eval_results.py --results evaluation_results/eval_baseline_ppo_floorplan30_20250502_033454/baseline_ppo_floorplan30_results.yaml evaluation_results/eval_channel_floorplan30_20250502_034142/channel_results.yaml evaluation_results/eval_bottleneck_floorplan30_20250502_034316/bottleneck_results.yaml evaluation_results/eval_weighted_floorplan30_20250502_042117/weighted_results.yaml --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 30 - Evaluation" --output comparison_plots_eval_floorplan30_all
+
+
+# python src/compare_eval_results.py --results evaluation_results/eval_baseline_ppo_floorplan1_20250502_024948/baseline_ppo_floorplan1_results.yaml evaluation_results/eval_gaze_channel_floorplan1_20250502_023229/channel_results.yaml evaluation_results/eval_gaze_bottleneck_floorplan1_20250502_025804/bottleneck_results.yaml evaluation_results/eval_gaze_weighted_floorplan1_20250502_025939/weighted_results.yaml --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 1 - Evaluation" --output comparison_plots_eval_floorplan1_all
+
+# python src/compare_eval_results.py --results logs/baseline_ppo_100k_floorplan30_20250501_185056/results/metrics.yaml logs/gaze_exp_floorplan30_channel_20250501_163301/results/metrics.yaml logs/gaze_exp_floorplan30_bottleneck_20250501_163353/results/metrics.yaml logs/gaze_exp_floorplan30_weighted_20250501_183725/results/metrics.yaml --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 30" --output comparison_plots_train_floorplan30_all
+
+# python src/compare_eval_results.py --results logs/baseline_ppo_100k_floorplan1_20250501_143639/results/metrics.yaml logs/gaze_exp_floorplan1_channel_20250501_174434/results/metrics.yaml logs/gaze_exp_floorplan1_bottleneck_20250501_145550/results/metrics.yaml logs/gaze_exp_floorplan1_weighted_20250501_145407/results/metrics.yaml --labels "Baseline PPO" "Gaze Channel" "Gaze Bottleneck" "Gaze Weighted" --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 1" --output comparison_plots_train_floorplan1_all
+
+# python src/compare_eval_results.py --results logs/baseline_ppo_100k_floorplan30_20250501_185056/results/metrics.yaml logs/gaze_pretrain_model_without_gaze_reward_channel_floorplan30_second_case/results/metrics.yaml logs/baseline_with_gaze_reward_only_floorplan30_third_case/results/metrics.yaml logs/gaze_exp_floorplan30_channel_20250501_163301/results/metrics.yaml --labels "PPO (No gaze)" "PPO (with gaze pretraining)" "PPO (with gaze incentives)" "PPO (with gaze pretraining & gaze rewards)" --title "AI2THOR Object Search Performance, Target: Microwave & Floorplan 30, Gaze Integration: Channel" --output comparison_plots_train_floorplan30_all_table_case

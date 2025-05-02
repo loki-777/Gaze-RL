@@ -490,8 +490,8 @@ if __name__ == "__main__":
     main()
 
 # Example usage:
-# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_expt_channel_20250430_224958/models/ppo_ai2thor_final --integration channel --target Microwave --num_episodes 50 --record_video
+# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_exp_floorplan30_channel_20250501_163301/models/ppo_ai2thor_final --integration channel --target Microwave --num_episodes 50 
 
-# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_expt_bottleneck_20250430_234927/models/ppo_ai2thor_final --integration bottleneck --target Microwave --num_episodes 50 --record_video
+# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_exp_floorplan30_bottleneck_20250501_163353/models/ppo_ai2thor_final --integration bottleneck --target Microwave --num_episodes 50 
 
-# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_expt_weighted_20250501_101103/models/ppo_ai2thor_final --integration weighted --target Microwave --num_episodes 50 --record_video
+# python src/eval_gaze_guided_rl.py --gaze_checkpoint logs/RESNET.ckpt --model_dir logs/gaze_exp_floorplan30_weighted_20250501_183725/models/ppo_ai2thor_final --integration weighted --target Microwave --num_episodes 50

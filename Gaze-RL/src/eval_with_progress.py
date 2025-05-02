@@ -367,7 +367,7 @@ def main():
         # Save metrics
         metrics_path = os.path.join(eval_dir, "metrics.yaml")
         with open(metrics_path, "w") as f:
-            yaml.dump(metrics, f)
+            yaml.dump(metrics, f, default_flow_style=False)
         
         # Plot results
         plot_evaluation_results(metrics, eval_dir)
@@ -396,4 +396,4 @@ if __name__ == "__main__":
     main()
 
 
-# python src/eval_with_progress.py --model_path logs/baseline_ppo_20250425_164153/models/ppo_ai2thor_final.zip --target Microwave --episodes 5
+# python src/eval_with_progress.py --model_path Gaze-RL/logs/baseline_ppo_new_20250502_075403/models/ppo_ai2thor_final.zip --target Microwave --episodes 50

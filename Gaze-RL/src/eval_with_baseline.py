@@ -49,8 +49,8 @@ def create_env(config, target_object, video_dir=None, record_freq=5, seed=None):
     # Update config for optimization
     env_config = config["environment"].copy()
     env_config["target_object"] = target_object
-    env_config["width"] = 224
-    env_config["height"] = 224
+    env_config["width"] = 128
+    env_config["height"] = 128
     env_config["grid_size"] = 0.25
     env_config["quality"] = "Medium"
     env_config["shadows"] = False
@@ -423,4 +423,4 @@ if __name__ == "__main__":
     main()
 
 # Example usage:
-# python src/eval_with_baseline.py --model_path logs/baseline_ppo_20250430_230037/models/ppo_ai2thor_final --target Microwave --num_episodes 50 --exp_name baseline_ppo --record_video
+# python src/eval_with_baseline.py --model_path logs/baseline_ppo_new_20250502_075403/models/ppo_ai2thor_final --target Microwave --num_episodes 50 --exp_name baseline_ppo_new 
