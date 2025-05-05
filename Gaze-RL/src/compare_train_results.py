@@ -195,4 +195,6 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python src/compare_results.py --base_metrics logs/baseline_ppo_20250426_132513/results/metrics.yaml --gaze_metrics logs/gaze_guided_search_20250426_143055/results/metrics.yaml
+# python src/compare_train_results.py --base_metrics logs/baseline_ppo_new_20250502_075403/results/metrics.yaml --gaze_metrics logs/gaze_expt_bottleneck_20250430_234927/results/metrics.yaml --output_dir train_comparison_plots_base_vs_bottleneck_general
+
+# logs/gaze_expt_channel_20250430_224958/results/metrics.yaml logs/gaze_expt_bottleneck_20250430_234927/results/metrics.yaml logs/gaze_expt_weighted_20250501_101103/results/metrics.yaml --output_dir train_comparison_plots

@@ -90,10 +90,11 @@ class AI2ThorEnv(gym.Env):
         
         while attempts < max_attempts:
             try:
-                problematic_scenes = ["FloorPlan3_physics"]
+                problematic_scenes = ["FloorPlan3", "FloorPlan26"]
                 # Select random scene from list of kitchen scenes
                 kitchen_scenes = [f"FloorPlan{i}" for i in range(1, 31) if i <= 5 or 25 <= i <= 30]
                 kitchen_scenes = [s for s in kitchen_scenes if s not in problematic_scenes]
+                #kitchen_scenes = ["FloorPlan30"]
                 scene = random.choice(kitchen_scenes)
                 
                 # Initialize scene

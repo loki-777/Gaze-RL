@@ -1,9 +1,163 @@
 import gymnasium as gym
 import numpy as np
 import torch
-from gymnasium import spaces
+from gymnasium import spaces, Wrapper
 from typing import Dict, Tuple, Any, Optional
+import cv2
+import os
+from datetime import datetime
+import time
 
+class RetryTimeoutWrapper(Wrapper):
+    """Wrapper to handle TimeoutError and retry actions"""
+    
+    def __init__(self, env, max_retries=3, retry_delay=1.0):
+        super().__init__(env)
+        self.max_retries = max_retries
+        self.retry_delay = retry_delay
+    
+    def step(self, action):
+        for attempt in range(self.max_retries):
+            try:
+                return self.env.step(action)
+            except TimeoutError as e:
+                if attempt < self.max_retries - 1:
+                    print(f"TimeoutError encountered, retrying action (attempt {attempt+1}/{self.max_retries})...")
+                    time.sleep(self.retry_delay)
+                else:
+                    print(f"Max retries exceeded, returning empty observation with termination")
+                    # Create a zero-filled observation with the proper shape
+                    zero_obs = np.zeros(self.observation_space.shape, dtype=np.float32)
+                    # Return a terminal state with a small penalty
+                    return zero_obs, -1.0, True, True, {"timeout": True}
+class VideoRecorderWrapper(Wrapper):
+    """Records episodes as videos."""
+    
+    def __init__(self, env, video_dir="videos", record_freq=5, video_quality=0.95):
+        """
+        Initialize the video recorder wrapper.
+        Args:
+            env: The environment to wrap
+            video_dir: Directory to save videos
+            record_freq: Record every N-th episode (default: 5)
+            video_quality: Quality of the video (0.0-1.0, higher is better)
+        """
+        super().__init__(env)
+        self.video_dir = video_dir
+        self.record_freq = record_freq
+        self.video_quality = video_quality
+        self.frames = []
+        self.episode_count = 0
+        self.recording = False
+        # Create video directory if it doesn't exist
+        os.makedirs(video_dir, exist_ok=True)
+
+    def reset(self, **kwargs):
+        obs, info = self.env.reset(**kwargs)
+
+        # Increment episode counter and determine if we should record
+        self.episode_count += 1
+        self.recording = (self.episode_count % self.record_freq == 0)
+
+        if self.recording:
+            print(f"Recording episode {self.episode_count}...")
+            # Clear frames buffer at start of episode
+            self.frames = []
+            # Capture the initial frame (handle both dict and array observations)
+            if hasattr(self.env.unwrapped, 'last_image'):
+                # Direct access to the AI2Thor last rendered image
+                frame = self.env.unwrapped.last_image.copy()
+                self.frames.append(frame)
+            elif isinstance(obs, dict) and "rgb" in obs:
+                frame = obs["rgb"].copy()
+                self.frames.append(frame)
+            elif len(obs.shape) == 3 and obs.shape[2] == 3:
+                # Simple RGB observation
+                frame = obs.copy()
+                self.frames.append(frame)
+            else:
+                # Observation might be flattened or have gaze channel
+                # Try to extract RGB information
+                try:
+                    # For flattened observations with known shape
+                    rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
+                    self.frames.append(rgb_obs)
+                except:
+                    print("Warning: Could not capture frame for video recording")
+        return obs, info
+
+    def step(self, action):
+        obs, reward, terminated, truncated, info = self.env.step(action)
+        # Only capture frame if we're recording this episode
+        if self.recording:
+            # Capture frame (handle both dict and array observations)
+            if hasattr(self.env.unwrapped, 'last_image'):
+                # Direct access to the AI2Thor last rendered image
+                frame = self.env.unwrapped.last_image.copy()
+                self.frames.append(frame)
+            elif isinstance(obs, dict) and "rgb" in obs:
+                frame = obs["rgb"].copy()
+                self.frames.append(frame)
+            elif len(obs.shape) == 3 and obs.shape[2] == 3:
+                # Simple RGB observation
+                frame = obs.copy()
+                self.frames.append(frame)
+            else:
+                # Observation might be flattened or have gaze channel
+                # Try to extract RGB information
+                try:
+                    # For flattened observations with known shape
+                    rgb_obs = obs.reshape(224, 224, 4)[:, :, :3].copy()
+                    self.frames.append(rgb_obs)
+
+                except:
+                    pass  # Skip this frame if we can't process it
+
+            # Save video if episode is done
+            if (terminated or truncated) and self.frames:
+                self.save_video()
+        return obs, reward, terminated, truncated, info
+    
+    def save_video(self):
+        """Save recorded frames as a video file."""
+        if not self.frames or len(self.frames) < 2:
+            print("Warning: Not enough frames to create video")
+            return
+            
+        # Create a timestamped filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_path = os.path.join(self.video_dir, f"episode_{timestamp}.mp4")
+        
+        try:
+            # Get frame dimensions
+            height, width = self.frames[0].shape[:2]
+            
+            # Create video writer
+            fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+            fps = 10  # Frames per second
+            out = cv2.VideoWriter(video_path, fourcc, fps, (width, height))
+            
+            # Write frames
+            for frame in self.frames:
+                # Ensure frame has right dimensions
+                if frame.shape[0] != height or frame.shape[1] != width:
+                    frame = cv2.resize(frame, (width, height))
+                
+                # Convert to BGR (OpenCV format) if needed
+                if frame.shape[-1] == 3:  # RGB format
+                    frame = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                
+                # Ensure frame is uint8
+                if frame.dtype != np.uint8:
+                    frame = (frame * 255).astype(np.uint8)
+                
+                out.write(frame)
+            
+            # Release video writer
+            out.release()
+            print(f"Saved video with {len(self.frames)} frames to {video_path}")
+        except Exception as e:
+            print(f"Error saving video: {e}")
 class FlattenObservationWrapper(gym.ObservationWrapper):
     """
     Wrapper to flatten Dict observation spaces for compatibility with Stable-Baselines3.

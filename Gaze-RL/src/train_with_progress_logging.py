@@ -17,6 +17,7 @@ from stable_baselines3.common.callbacks import BaseCallback
 
 # Import your environment
 from environments.ai2thor_gymnasium_env import AI2ThorEnv
+from env_wrappers import VideoRecorderWrapper, RetryTimeoutWrapper
 
 # Custom callback to print training progress
 class ProgressCallback(BaseCallback):
@@ -24,6 +25,7 @@ class ProgressCallback(BaseCallback):
         super().__init__(verbose)
         self.episode_rewards = []
         self.episode_lengths = []
+        self.success_rates = []  # Add success rate tracking
         self.current_episode_reward = 0
         self.current_steps = 0
         self.start_time = time.time()
@@ -36,6 +38,7 @@ class ProgressCallback(BaseCallback):
             if "episode" in info:
                 episode_reward = info["episode"]["r"]
                 episode_length = info["episode"]["l"]
+                success = 1 if info.get("success", False) else 0  # Get success flag
                 
                 # Calculate elapsed time
                 elapsed_time = time.time() - self.start_time
@@ -49,19 +52,23 @@ class ProgressCallback(BaseCallback):
                       f"Steps: {self.num_timesteps}/{self.locals['total_timesteps']} | "
                       f"Reward: {episode_reward:.2f} | "
                       f"Length: {episode_length} steps | "
+                      f"Success: {'✓' if success else '✗'} | "  # Add success indicator
                       f"Elapsed: {elapsed_str}")
                 
                 # Store stats
                 self.episode_rewards.append(episode_reward)
                 self.episode_lengths.append(episode_length)
+                self.success_rates.append(success)  # Store success rate
                 
                 # Print additional stats every 5 episodes
                 if len(self.episode_rewards) % 5 == 0:
                     mean_reward = np.mean(self.episode_rewards[-5:])
                     mean_length = np.mean(self.episode_lengths[-5:])
+                    success_rate = np.mean(self.success_rates[-5:]) * 100  # Calculate success rate
                     print(f"[{timestamp}] Last 5 episodes: "
                           f"Mean reward = {mean_reward:.2f} | "
-                          f"Mean length = {mean_length:.1f} steps")
+                          f"Mean length = {mean_length:.1f} steps"
+                          f"Success rate = {success_rate:.1f}%")  # Add success rate
                 
                 # Print overall stats every 10 episodes
                 if len(self.episode_rewards) % 10 == 0:
@@ -106,9 +113,11 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="baseline",
                         help="Experiment name for logging")
+    parser.add_argument("--record_freq", type=int, default=100,
+                    help="Record every N-th episode (default: 100)")
     return parser.parse_args()
 
-def create_env(config, target_object):
+def create_env(config, target_object, video_dir=None, record_freq=100):
     """Create environment with proper settings for Mac"""
     
     # Update config for Mac optimization
@@ -116,9 +125,9 @@ def create_env(config, target_object):
     env_config["target_object"] = target_object
     env_config["width"] = 224
     env_config["height"] = 224
-    env_config["grid_size"] = 0.25
+    env_config["grid_size"] = 0.5
     # Add Mac-friendly settings
-    env_config["quality"] = "Medium"
+    env_config["quality"] = "Very Low"
     env_config["shadows"] = False
     
     def _init():
@@ -127,9 +136,18 @@ def create_env(config, target_object):
             env_config,
             render_mode=None  # No rendering during training for performance
         )
+
+        # Add the retry wrapper before the monitor
+        env = RetryTimeoutWrapper(env, max_retries=3, retry_delay=1.0)
         
         # Wrap with Monitor to track episode rewards
         monitor_env = Monitor(env)
+
+        # Add video recording as the final wrapper if video_dir is provided
+        if video_dir is not None:
+            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir, record_freq=record_freq)
+            print(f"Video recording enabled: recording every {record_freq} episodes to {video_dir}")
+        
         
         # Print when a new environment is created
         print(f"Created environment for target object: {target_object}")
@@ -188,6 +206,7 @@ def main():
         device_name = "CPU"
         
     logger.info("\n" + "="*60)
+    logger.info("TRAINING COMPLETED!")
     logger.info(f"Experiment: {args.exp_name}")
     logger.info(f"Experiment ID: {experiment_id}")
     logger.info(f"Starting training run at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -206,11 +225,14 @@ def main():
         with open(config_path, "w") as f:
             yaml.dump(config, f)
         
-        logger.info("Creating environment...")
-        # Create environment function
-        env_fn = create_env(config, args.target)
+
+        # Create video directory
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        video_dir = os.path.join("videos", f"{args.exp_name}_baseline_ppo_{timestamp}")
+        os.makedirs(video_dir, exist_ok=True)
         
-        # Create vectorized environment
+        logger.info("Creating environment...")
+        env_fn = create_env(config, args.target, video_dir=video_dir, record_freq=args.record_freq)
         logger.info("Initializing vectorized environment...")
         env = DummyVecEnv([env_fn])
         
@@ -282,9 +304,11 @@ def main():
             "episodes_completed": len(progress_callback.episode_rewards),
             "episode_rewards": progress_callback.episode_rewards,
             "episode_lengths": progress_callback.episode_lengths,
+            "success_rates": progress_callback.success_rates,  # Add success rates
             "mean_reward": float(np.mean(progress_callback.episode_rewards)),
             "mean_last_10_reward": float(np.mean(progress_callback.episode_rewards[-10:])),
             "mean_episode_length": float(np.mean(progress_callback.episode_lengths)),
+            "overall_success_rate": float(np.mean(progress_callback.success_rates) * 100),  # Add overall success rate
             "training_duration_seconds": train_duration,
         }
         
@@ -322,4 +346,4 @@ def main():
 if __name__ == "__main__":
     main()
 
-# python train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 50000
+# python src/train_with_progress_logging.py --exp_name baseline_ppo --target Microwave --timesteps 100000

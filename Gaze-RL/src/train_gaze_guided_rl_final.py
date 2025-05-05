@@ -18,7 +18,7 @@ import pytorch_lightning as pl
 
 # Import your environment and wrappers
 from environments.ai2thor_gymnasium_env import AI2ThorEnv
-from env_wrappers import FlattenObservationWrapper, GazeEnvWrapper, GazePreprocessEnvWrapper
+from env_wrappers import FlattenObservationWrapper, GazeEnvWrapper, GazePreprocessEnvWrapper, VideoRecorderWrapper
 from src.models.agents import GazePPO
 from src.models.lightning_module import GazeLightningModule
 
@@ -122,10 +122,12 @@ def parse_args():
     # Add experiment name parameter
     parser.add_argument("--exp_name", type=str, default="gaze_guided",
                         help="Experiment name for logging")
-    # Gaze Addition Variations
+    # Gaze Integration Variations
     parser.add_argument("--gaze_integration", type=str, default="channel",
                         choices=["channel", "bottleneck", "weighted"],
                         help="Method to integrate gaze information")
+    parser.add_argument("--record_freq", type=int, default=20,
+                    help="Record every N-th episode (default: 1000)")
     return parser.parse_args()
 
 def load_gaze_model(checkpoint_path):
@@ -153,7 +155,7 @@ def load_gaze_model(checkpoint_path):
         print(traceback.format_exc())
         return None
 
-def create_env(config, target_object, gaze_model=None):
+def create_env(config, target_object, gaze_model=None, video_dir=None, record_freq=20):
     """Create environment with gaze integration"""
     
     # Update config for optimization
@@ -193,6 +195,11 @@ def create_env(config, target_object, gaze_model=None):
         
         # Wrap with Monitor to track episode rewards
         monitor_env = Monitor(env)
+
+        # Add video recording as the final wrapper if video_dir is provided
+        if video_dir is not None:
+            monitor_env = VideoRecorderWrapper(monitor_env, video_dir=video_dir, record_freq=record_freq)
+            print(f"Video recording enabled: recording every {record_freq} episodes to {video_dir}")
         
         # Print environment configuration
         print(f"Created environment for target object: {target_object}")
@@ -200,25 +207,6 @@ def create_env(config, target_object, gaze_model=None):
         return monitor_env
     
     return _init
-
-def parse_args():
-    parser = argparse.ArgumentParser(description="Train Gaze-Guided RL agent for object search")
-    parser.add_argument("--config", type=str, default="configs/default.yaml", 
-                        help="Path to config file")
-    parser.add_argument("--gaze_config", type=str, default="configs/gaze_config.yaml",
-                        help="Path to gaze model config file")
-    parser.add_argument("--gaze_checkpoint", type=str, default=None,
-                        help="Path to pretrained gaze model checkpoint (.ckpt file), overrides config")
-    parser.add_argument("--target", type=str, default="Microwave",
-                        help="Target object to search")
-    parser.add_argument("--log_dir", type=str, default="logs",
-                        help="Directory to save logs")
-    parser.add_argument("--timesteps", type=int, default=50000,
-                        help="Total timesteps for training")
-    # Add experiment name parameter
-    parser.add_argument("--exp_name", type=str, default="gaze_guided",
-                        help="Experiment name for logging")
-    return parser.parse_args()
 
 def train_agent(config, env, gaze_model, total_timesteps=50000, log_dir="logs", exp_name="gaze_guided", gaze_integration="ChannelCNN"):
     """Train an agent with gaze guidance"""
@@ -410,21 +398,38 @@ def main():
     # Update config with command line arguments
     config["environment"]["target_object"] = args.target
     
+    # Map integration method to feature extractor class name
+    integration_to_extractor = {
+        "channel": "ChannelCNN",
+        "bottleneck": "GazeAttnCNN",
+        "weighted": "WeightedCNN"
+    }
+    
+    # Get integration method from command line arg
+    gaze_integration = args.gaze_integration
+    
+    # Update config with the correct feature extractor
+    config["model"]["features_extractor"] = integration_to_extractor[gaze_integration]
+    config["model"]["use_gaze"] = True
+    
     # Get gaze checkpoint path - command line arg overrides config
     gaze_checkpoint_path = args.gaze_checkpoint if args.gaze_checkpoint else config["gaze"]["model_path"]
-    
-    # Get integration method - command line arg overrides config
-    gaze_integration = config["model"]["features_extractor"]
     
     # Load pretrained gaze model
     gaze_model = load_gaze_model(gaze_checkpoint_path)
     
     print("\n" + "="*60)
     print(f"TRAINING WITH GAZE GUIDANCE ({gaze_integration} integration)")
+    print(f"Using feature extractor: {config['model']['features_extractor']}")
     print("="*60 + "\n")
     
+    # Create video directory
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    video_dir = os.path.join("videos", f"{args.exp_name}_{gaze_integration}_{timestamp}")
+    os.makedirs(video_dir, exist_ok=True)
+    
     # Create environment with gaze
-    env_fn = create_env(config, args.target, gaze_model=gaze_model)
+    env_fn = create_env(config, args.target, gaze_model=gaze_model, video_dir=video_dir, record_freq=args.record_freq)
     env = DummyVecEnv([env_fn])
     
     # Train with gaze
@@ -445,6 +450,10 @@ if __name__ == "__main__":
     main()
 
 # Example usage:
-# python src/train_gaze_guided_rl_final.py --exp_name gaze_guided_search --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_exp --target Microwave --timesteps 100000 --gaze_checkpoint logs/RESNET.ckpt
 
-# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 10000 --gaze_checkpoint logs/epoch=19-step=6260.ckpt --gaze_integration bottleneck
+# python src/train_gaze_guided_rl_final.py --exp_name gaze_expt --target Microwave --timesteps 100000 --gaze_checkpoint logs/RESNET.ckpt --gaze_integration channel
+
+# --gaze_integration channel will use ChannelCNN
+# --gaze_integration bottleneck will use GazeAttnCNN
+# --gaze_integration weighted will use WeightedCNN
